@@ -120,7 +120,7 @@ namespace Sqlite.ORM
                         '{TableName}' ( {schema} );
                     ";
 
-            CreateAndExecuteNonQueryCommandAsync(commandText);
+            CreateAndExecuteNonQueryCommand(commandText);
         }
         
         /// <summary>
@@ -140,7 +140,7 @@ namespace Sqlite.ORM
                         ({propertiesValues});
                     ";
 
-            CreateAndExecuteNonQueryCommandAsync(commandText);
+            CreateAndExecuteNonQueryCommand(commandText);
         }
 
 
@@ -163,7 +163,7 @@ namespace Sqlite.ORM
                         {propertiesValues};
                     ";
 
-            CreateAndExecuteNonQueryCommandAsync(commandText);
+            CreateAndExecuteNonQueryCommand(commandText);
         }
 
 
@@ -319,7 +319,7 @@ namespace Sqlite.ORM
                     LIMIT 1;
                     ";
             
-            CreateAndExecuteNonQueryCommandAsync(commandText);
+            CreateAndExecuteNonQueryCommand(commandText);
         }
         
         
@@ -346,7 +346,7 @@ namespace Sqlite.ORM
                     LIMIT {limitCount};
                     ";
             
-            CreateAndExecuteNonQueryCommandAsync(commandText);
+            CreateAndExecuteNonQueryCommand(commandText);
         }
         
         /// <summary>
@@ -358,7 +358,7 @@ namespace Sqlite.ORM
                     DELETE FROM {TableName};
                     ";
             
-            CreateAndExecuteNonQueryCommandAsync(commandText);
+            CreateAndExecuteNonQueryCommand(commandText);
         }
 
         /// <summary>
@@ -434,7 +434,7 @@ namespace Sqlite.ORM
         /// </summary>
         /// <param name="commandText"></param>
         /// <returns></returns>
-        private void CreateAndExecuteNonQueryCommandAsync(string commandText)
+        private void CreateAndExecuteNonQueryCommand(string commandText)
         {
             if (SqliteConnection.State != ConnectionState.Open)
             {
