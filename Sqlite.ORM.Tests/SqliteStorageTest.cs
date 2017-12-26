@@ -5,6 +5,7 @@ using Ploeh.AutoFixture;
 using System.Collections.Generic;
 using System.Linq;
 
+// this should stop running tests in parallel
 [assembly: CollectionBehavior(DisableTestParallelization = true)]
 
 namespace Sqlite.ORM.Tests
