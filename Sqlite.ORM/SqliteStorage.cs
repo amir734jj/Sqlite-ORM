@@ -33,7 +33,7 @@ namespace Sqlite.ORM
         }
 
         /// <summary>
-        /// Map between C# data types and Sqlite data types
+        /// Map between C# data types and Sqlite data types, used for creating a database table
         /// </summary>
         public static readonly Dictionary<Type, SqliteTypes> DataTypeToSqliteTypeDictionary = new Dictionary<Type, SqliteTypes>()
         {
@@ -48,7 +48,8 @@ namespace Sqlite.ORM
     
 
     /// <summary>
-    /// Data access layer to store files into sqlite database
+    /// Data access layer to store models into Sqlite database,
+    /// creates a table
     /// </summary>
     public class SqliteStorage<T> : ISqliteStorage<T>, IDisposable
     {
@@ -167,6 +168,16 @@ namespace Sqlite.ORM
 
 
         /// <summary>
+        /// Retrieves a model from database
+        /// </summary>
+        /// <param name="model"></param>
+        /// <returns></returns>
+        public T RetrieveModel(T model)
+        {
+            return RetrieveModel(ConvertModelToDictionary(model));
+        }
+
+        /// <summary>
         /// Given key value pair of property and property values, it returns an object
         /// </summary>
         /// <param name="keyValueDictionary"></param>
@@ -180,7 +191,7 @@ namespace Sqlite.ORM
             }
             
             var propertiesSchema = string.Join(',', ModelPropertiesNames);
-            var propertiesValues = string.Join("AND", keyValueDictionary.Select(keyValuePair => $"{keyValuePair.Key} = '{keyValuePair.Value}'"));
+            var propertiesValues = string.Join("AND", keyValueDictionary.Select(keyValuePair => $" {keyValuePair.Key} = '{keyValuePair.Value}' "));
             
             var commandText = $@"
                     SELECT {propertiesSchema}
@@ -220,7 +231,7 @@ namespace Sqlite.ORM
             }
             
             var propertiesSchema = string.Join(',', ModelPropertiesNames);
-            var propertiesValues = string.Join("AND", keyValueDictionary.Select(keyValuePair => $"{keyValuePair.Key} = '{keyValuePair.Value}'"));
+            var propertiesValues = string.Join("AND", keyValueDictionary.Select(keyValuePair => $" {keyValuePair.Key} = '{keyValuePair.Value}' "));
             
             var commandText = $@"
                     SELECT {propertiesSchema}
@@ -289,18 +300,50 @@ namespace Sqlite.ORM
             return retVal;
         }
 
+        public void DeleteModel(T models)
+        {
+            DeleteModel(ConvertModelToDictionary(models));
+        }
 
         /// <summary>
-        /// Deletes all models from database, optionally we can specify the limit
+        /// Deletes all models from database
         /// </summary>
         /// <param name="keyValueDictionary"></param>
-        public void DeleteModels(Dictionary<string, object> keyValueDictionary)
+        public void DeleteModel(Dictionary<string, object> keyValueDictionary)
         {
             var propertiesValues = string.Join("AND", keyValueDictionary.Select(keyValuePair => $"{keyValuePair.Key} = '{keyValuePair.Value}'"));
             
             var commandText = $@"
                     DELETE FROM {TableName}
-                    WHERE {propertiesValues};
+                    WHERE {propertiesValues}
+                    LIMIT 1;
+                    ";
+            
+            CreateAndExecuteNonQueryCommandAsync(commandText);
+        }
+        
+        
+        /// <summary>
+        /// Deletes all models from list of models
+        /// </summary>
+        /// <param name="models"></param>
+        public void DeleteModels(List<T> models)
+        {
+            models.ForEach(x => DeleteModel(ConvertModelToDictionary(x)));
+        }
+
+        /// <summary>
+        /// Deletes all models from database, optionally we can specify the limit
+        /// </summary>
+        /// <param name="keyValueDictionary"></param>
+        public void DeleteModels(Dictionary<string, object> keyValueDictionary, int limitCount = Configuration.LimitCount)
+        {
+            var propertiesValues = string.Join("AND", keyValueDictionary.Select(keyValuePair => $"{keyValuePair.Key} = '{keyValuePair.Value}'"));
+            
+            var commandText = $@"
+                    DELETE FROM {TableName}
+                    WHERE {propertiesValues}
+                    LIMIT {limitCount};
                     ";
             
             CreateAndExecuteNonQueryCommandAsync(commandText);
@@ -331,6 +374,9 @@ namespace Sqlite.ORM
 
             return Convert.ToInt32(CreateCommand(commandText).ExecuteScalar());
         }
+        
+        
+        #region HELPERS
         
         /// <summary>
         /// Checks of all properties in key value dictionary do exist in model
@@ -388,7 +434,7 @@ namespace Sqlite.ORM
         /// </summary>
         /// <param name="commandText"></param>
         /// <returns></returns>
-        private async void CreateAndExecuteNonQueryCommandAsync(string commandText)
+        private void CreateAndExecuteNonQueryCommandAsync(string commandText)
         {
             if (SqliteConnection.State != ConnectionState.Open)
             {
@@ -397,12 +443,14 @@ namespace Sqlite.ORM
 
             var transaction = SqliteConnection.BeginTransaction();
             var command = SqliteConnection.CreateCommand();
+            command.Transaction = transaction;
             
             Transactions.Add(transaction);
+            
             try
             {             
                 command.CommandText = commandText;
-                await command.ExecuteNonQueryAsync();
+                command.ExecuteNonQuery();
             }
             catch (Exception e)
             {
@@ -418,6 +466,20 @@ namespace Sqlite.ORM
             }
         }
         
+        /// <summary>
+        /// Converts model object to key/value dictionary of property name/property value
+        /// </summary>
+        /// <param name="obj"></param>
+        /// <returns></returns>
+        private Dictionary<string, object> ConvertModelToDictionary(T obj)
+        {
+            var objectType = obj.GetType();
+
+            return ModelProperties
+                .Where(x => objectType.GetProperty(x.Name).GetValue(obj, null) != null)
+                .ToDictionary(x => x.Name, x => objectType.GetProperty(x.Name).GetValue(obj, null));
+        }
+        
 
         /// <inheritdoc />
         /// <summary>
@@ -425,8 +487,12 @@ namespace Sqlite.ORM
         /// </summary>
         public void Dispose()
         {
-            SqliteConnection.Close();
+            // SqliteConnection.Close();
         }
+        
+        #endregion
+
+        #region STATIC_HELPERS
 
         /// <summary>
         /// Returns default value given type
@@ -470,5 +536,7 @@ namespace Sqlite.ORM
             // this was needed otherwise code thorws an exception
             return data is long ? Convert.ToInt32(data) : data;
         }
+        
+        #endregion
     }
 }

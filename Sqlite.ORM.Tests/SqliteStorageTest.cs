@@ -5,6 +5,8 @@ using Ploeh.AutoFixture;
 using System.Collections.Generic;
 using System.Linq;
 
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
+
 namespace Sqlite.ORM.Tests
 {
     public class DummyTestClass : IEquatable<DummyTestClass>
@@ -36,7 +38,7 @@ namespace Sqlite.ORM.Tests
         public SqliteStorageTest()
         {
             DataFixture = new Fixture();
-            SqliteStorage = new SqliteStorage<DummyTestClass>("test.sqlite");
+            SqliteStorage = new SqliteStorage<DummyTestClass>();
             
             Dispose();
         }
@@ -49,9 +51,7 @@ namespace Sqlite.ORM.Tests
 
             // Act
             SqliteStorage.StoreModel(obj);
-            var newObj = SqliteStorage.RetrieveModel(new Dictionary<string, object>() {
-                { "FirstName",  obj.FirstName }
-            });
+            var newObj = SqliteStorage.RetrieveModel(obj);
 
             // Assert
             Assert.Equal(obj, newObj);
