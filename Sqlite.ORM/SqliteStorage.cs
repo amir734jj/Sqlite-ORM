@@ -58,9 +58,15 @@ namespace Sqlite.ORM
         private string TableName { get; set; }
         private List<PropertyInfo> ModelProperties { get; set; }
         private List<string> ModelPropertiesNames { get; set; }
-        public SqliteStorage() : this(typeof(T).Name) { }
         public List<SqliteTransaction> Transactions { get; set; }
 
+        
+        /// <inheritdoc />
+        /// <summary>
+        /// Parameterless constructor
+        /// </summary>
+        public SqliteStorage() : this(typeof(T).Name) { }
+        
         /// <summary>
         /// Constructor
         /// </summary>
@@ -91,6 +97,8 @@ namespace Sqlite.ORM
             Console.WriteLine($"Connection string: {SqliteConnection.ConnectionString}");
         }
 
+        #region INTERNAL
+        
         /// <summary>
         /// Creates connection string and connects to database
         /// </summary>
@@ -122,6 +130,10 @@ namespace Sqlite.ORM
 
             CreateAndExecuteNonQueryCommand(commandText);
         }
+        
+        #endregion
+
+        #region FUNCTIONALITIES
         
         /// <summary>
         /// Stores model into database
@@ -300,6 +312,10 @@ namespace Sqlite.ORM
             return retVal;
         }
 
+        /// <summary>
+        /// Deletes object model from database
+        /// </summary>
+        /// <param name="models"></param>
         public void DeleteModel(T models)
         {
             DeleteModel(ConvertModelToDictionary(models));
@@ -375,6 +391,7 @@ namespace Sqlite.ORM
             return Convert.ToInt32(CreateCommand(commandText).ExecuteScalar());
         }
         
+        #endregion
         
         #region HELPERS
         
