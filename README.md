@@ -1,1 +1,2 @@
-Sqlite-ORM
+# Sqlite-ORM
+Simple Sqlite ORM
