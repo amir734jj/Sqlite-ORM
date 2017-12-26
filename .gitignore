@@ -1,0 +1,9 @@
+
+Sqlite.ORM/bin
+Sqlite.ORM/obj
+
+Sqlite.ORM.Tests/bin
+Sqlite.ORM.Tests/obj
+
+.vs
+.idea
