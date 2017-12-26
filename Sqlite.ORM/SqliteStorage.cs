@@ -223,7 +223,6 @@ namespace Sqlite.ORM
             SetObjectPropertiesFromReader(obj, obj.GetType(), reader);
 
             command.Dispose();
-            Dispose();
             
             return obj;
         }
@@ -270,7 +269,6 @@ namespace Sqlite.ORM
             }
             
             command.Dispose();
-            Dispose();
             
             return retVal;
         }
@@ -307,7 +305,6 @@ namespace Sqlite.ORM
             }
             
             command.Dispose();
-            Dispose();
             
             return retVal;
         }
@@ -478,8 +475,6 @@ namespace Sqlite.ORM
                 transaction.Commit();
                 transaction.Dispose();
                 command.Dispose();
-                
-                Dispose();
             }
         }
         
@@ -504,7 +499,7 @@ namespace Sqlite.ORM
         /// </summary>
         public void Dispose()
         {
-            // SqliteConnection.Close();
+            SqliteConnection.Close();
         }
         
         #endregion
