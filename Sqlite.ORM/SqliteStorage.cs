@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -220,7 +221,7 @@ namespace Sqlite.ORM
         /// <param name="limitCount"></param>
         /// <returns></returns>
         /// <exception cref="ArgumentException"></exception>
-        public List<T> RetrieveModels(Dictionary<string, object> keyValueDictionary, int limitCount = Configuration.LimitCount)
+        public IEnumerable<T> RetrieveModels(Dictionary<string, object> keyValueDictionary, int limitCount = Configuration.LimitCount)
         {
             if (keyValueDictionary == null || keyValueDictionary.Count == 0 || !CheckModelKeyValueDictionary(keyValueDictionary))
             {
@@ -264,7 +265,7 @@ namespace Sqlite.ORM
         /// Retrieves all models
         /// </summary>
         /// <returns></returns>
-        public List<T> RetrieveAllModels(int limitCount = Configuration.LimitCount)
+        public IEnumerable<T> RetrieveAllModels(int limitCount = Configuration.LimitCount)
         {
             var propertiesSchema = string.Join(',', ModelPropertiesNames);
 
