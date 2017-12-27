@@ -1,5 +1,5 @@
 # Sqlite-ORM
-Simple Sqlite ORM, easy and intuitive to use. This ORM follows code-first deisgn, but you can use database-first design as long as database schema matches type conversions.
+Simple Sqlite ORM, easy and intuitive to use. This ORM follows code-first deisgn, but you can use database-first design as long as database schema matches type conversions. Currently code does not support complex types.
 
 ```C#
 // initialize new instance
