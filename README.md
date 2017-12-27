@@ -3,7 +3,7 @@ Simple Sqlite ORM
 
 ```C#
 // initialize new instance
-SqliteStorage = new SqliteStorage<DummyTestClass>();
+var SqliteStorage = new SqliteStorage<DummyTestClass>();
 
 // create dummy object
 var obj = new DummyTestClass();
