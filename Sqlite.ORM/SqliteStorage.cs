@@ -210,37 +210,7 @@ namespace Sqlite.ORM
         /// <exception cref="ArgumentException"></exception>
         public T RetrieveModel(Dictionary<string, object> keyValueDictionary)
         {
-            if (keyValueDictionary == null || keyValueDictionary.Count == 0 || !CheckModelKeyValueDictionary(keyValueDictionary))
-            {
-                throw new ArgumentException($"There are keys in given the dictionary that do not exist in model");
-            }
-            
-            var propertiesSchema = string.Join(',', ModelPropertiesNames);
-            var propertiesValues = string.Join("AND", keyValueDictionary.Select(keyValuePair =>
-                $" {keyValuePair.Key} = '{keyValuePair.Value}' "));
-            
-            var commandText = $@"
-                    SELECT {propertiesSchema}
-                    FROM {TableName}
-                    WHERE {propertiesValues}
-                    LIMIT 1;
-                    ";
-
-            var command = CreateCommand(commandText);
-            var reader = command.ExecuteReader();
-            
-            var obj = CreateRawObject();
-
-            if (!reader.Read()) return obj;
-            
-            // fill object properties using the reader
-            SetObjectPropertiesFromReader(obj, obj.GetType(), reader);
-
-            command.Dispose();
-            reader.Dispose();
-            Dispose();
-            
-            return obj;
+            return RetrieveModels(keyValueDictionary, 1).FirstOrDefault();
         }
 
         /// <summary>
@@ -272,8 +242,6 @@ namespace Sqlite.ORM
             var reader = command.ExecuteReader();
             
             var retVal = new List<T>();
-
-            if (!reader.Read()) return retVal;
 
             while (reader.Read())
             {
@@ -310,8 +278,6 @@ namespace Sqlite.ORM
             var reader = command.ExecuteReader();
 
             var retVal = new List<T>();
-
-            if (!reader.Read()) return retVal;
 
             while (reader.Read())
             {
