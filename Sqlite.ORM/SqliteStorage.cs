@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Data;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using Microsoft.Data.Sqlite;
@@ -17,6 +18,10 @@ namespace Sqlite.ORM
         public const string TableNameSufix = "__TABLE";
         public static readonly string NewLine = Environment.NewLine;
         public const int LimitCount = 100;
+
+        private const string DefaultDatabaseName = "db.sqlite";
+        private static readonly string DefaultDatabaseFolderPath = Environment.CurrentDirectory;
+        public static readonly string DefaultDataBaseStoragePath = Path.Combine(DefaultDatabaseFolderPath, DefaultDatabaseName);
     }
     
     internal static class DataType
@@ -42,7 +47,9 @@ namespace Sqlite.ORM
             { typeof(long), SqliteTypes.Numeric },
             { typeof(float), SqliteTypes.Real },
             { typeof(double), SqliteTypes.Real },
-            { typeof(string), SqliteTypes.Text }
+            { typeof(string), SqliteTypes.Text },
+            { typeof(DateTime), SqliteTypes.Text },
+            { typeof(char), SqliteTypes.Text }
         };
     }
 
@@ -69,7 +76,7 @@ namespace Sqlite.ORM
         /// <summary>
         /// Parameterless constructor
         /// </summary>
-        public SqliteStorage() : this(typeof(T).Name) { }
+        public SqliteStorage() : this(Configuration.DefaultDataBaseStoragePath) { }
         
         /// <summary>
         /// Constructor
@@ -457,7 +464,7 @@ namespace Sqlite.ORM
             }
             catch (Exception e)
             {
-                throw new ArgumentException(e?.Message);
+                throw new ArgumentException(e?.Message + commandText);
             }
             finally
             {
@@ -528,6 +535,12 @@ namespace Sqlite.ORM
                 return string.Empty;
             }
 
+            // see this: https://stackoverflow.com/a/11912432/1834787
+            if (value is char || value is string)
+            {                
+                value = value.ToString().Replace("'", @"''");
+            }
+
             return value;
         }
 
@@ -548,6 +561,10 @@ namespace Sqlite.ORM
                     return Convert.ToInt32(data);
                 case double _ when type == typeof(float):
                     return Convert.ToSingle(data);
+                case string _ when type == typeof(DateTime):
+                    return DateTime.Parse((string) data);
+                case string _ when type == typeof(char):
+                    return Convert.ToChar(data);
             }
 
             return data;
