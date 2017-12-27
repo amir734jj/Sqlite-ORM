@@ -213,7 +213,8 @@ namespace Sqlite.ORM
             }
             
             var propertiesSchema = string.Join(',', ModelPropertiesNames);
-            var propertiesValues = string.Join("AND", keyValueDictionary.Select(keyValuePair => $" {keyValuePair.Key} = '{keyValuePair.Value}' "));
+            var propertiesValues = string.Join("AND", keyValueDictionary.Select(keyValuePair =>
+                $" {keyValuePair.Key} = '{keyValuePair.Value}' "));
             
             var commandText = $@"
                     SELECT {propertiesSchema}
@@ -254,7 +255,8 @@ namespace Sqlite.ORM
             }
             
             var propertiesSchema = string.Join(',', ModelPropertiesNames);
-            var propertiesValues = string.Join("AND", keyValueDictionary.Select(keyValuePair => $" {keyValuePair.Key} = '{keyValuePair.Value}' "));
+            var propertiesValues = string.Join("AND", keyValueDictionary.Select(keyValuePair =>
+                $" {keyValuePair.Key} = '{keyValuePair.Value}' "));
             
             var commandText = $@"
                     SELECT {propertiesSchema}
@@ -340,7 +342,8 @@ namespace Sqlite.ORM
         /// <param name="keyValueDictionary"></param>
         public void DeleteModel(Dictionary<string, object> keyValueDictionary)
         {
-            var propertiesValues = string.Join("AND", keyValueDictionary.Select(keyValuePair => $"{keyValuePair.Key} = '{keyValuePair.Value}'"));
+            var propertiesValues = string.Join("AND", keyValueDictionary.Select(keyValuePair =>
+                $"{keyValuePair.Key} = '{keyValuePair.Value}'"));
             
             var commandText = $@"
                     DELETE FROM {TableName}
@@ -365,9 +368,11 @@ namespace Sqlite.ORM
         /// Deletes all models from database, optionally we can specify the limit
         /// </summary>
         /// <param name="keyValueDictionary"></param>
+        /// <param name="limitCount"></param>
         public void DeleteModels(Dictionary<string, object> keyValueDictionary, int limitCount = Configuration.LimitCount)
         {
-            var propertiesValues = string.Join("AND", keyValueDictionary.Select(keyValuePair => $"{keyValuePair.Key} = '{keyValuePair.Value}'"));
+            var propertiesValues = string.Join("AND", keyValueDictionary.Select(keyValuePair => 
+                $"{keyValuePair.Key} = '{keyValuePair.Value}'"));
             
             var commandText = $@"
                     DELETE FROM {TableName}
@@ -412,7 +417,6 @@ namespace Sqlite.ORM
                     SELECT COUNT (*)
                     FROM {TableName};
                     ";
-
 
             var command = CreateCommand(commandText);
 
@@ -581,7 +585,7 @@ namespace Sqlite.ORM
             {
                 case null:
                     return null;
-                case long _ when type != typeof(long):
+                case long _ when type == typeof(int):
                     return Convert.ToInt32(data);
                 case double _ when type == typeof(float):
                     return Convert.ToSingle(data);
