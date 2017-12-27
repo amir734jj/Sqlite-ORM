@@ -1,7 +1,7 @@
 # Sqlite-ORM
 Simple Sqlite ORM
 
-```C
+```C#
 // initialize new instance
 SqliteStorage = new SqliteStorage<DummyTestClass>();
 
