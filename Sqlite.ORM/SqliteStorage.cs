@@ -59,6 +59,7 @@ namespace Sqlite.ORM
         private List<string> ModelPropertiesNames { get; set; }
         public List<SqliteTransaction> Transactions { get; set; }
 
+        #region CONSTRUCTORS
         
         /// <inheritdoc />
         /// <summary>
@@ -95,6 +96,8 @@ namespace Sqlite.ORM
             
             Console.WriteLine($"Connection string: {SqliteConnection.ConnectionString}");
         }
+        
+        #endregion
 
         #region INTERNAL
         
