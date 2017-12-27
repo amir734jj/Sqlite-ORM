@@ -109,6 +109,20 @@ namespace Sqlite.ORM.Tests
             // Assert
             Assert.Equal(countOfModels, SqliteStorage.GetCountOfModels());
         }
+        
+        [Fact]
+        public void Test__RetrieveAll()
+        {
+            // Assign
+            const int countOfModels = 10;
+            var objects = DataFixture.CreateMany<DummyTestClass>(countOfModels).ToList();
+
+            // Act
+            SqliteStorage.StoreModels(objects);
+
+            // Assert
+            Assert.Equal(objects, SqliteStorage.RetrieveAllModels());
+        }
 
         /// <inheritdoc />
         /// <summary>

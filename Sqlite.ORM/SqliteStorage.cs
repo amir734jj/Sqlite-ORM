@@ -45,8 +45,11 @@ namespace Sqlite.ORM
             { typeof(string), SqliteTypes.Text }
         };
     }
-    
 
+
+    /// <inheritdoc>
+    ///     <cref></cref>
+    /// </inheritdoc>
     /// <summary>
     /// Data access layer to store models into Sqlite database,
     /// creates a table
@@ -58,7 +61,7 @@ namespace Sqlite.ORM
         private string TableName { get; set; }
         private List<PropertyInfo> ModelProperties { get; set; }
         private List<string> ModelPropertiesNames { get; set; }
-        public List<SqliteTransaction> Transactions { get; set; }
+        private List<SqliteTransaction> Transactions { get; set; }
 
         #region CONSTRUCTORS
         
@@ -223,7 +226,10 @@ namespace Sqlite.ORM
         /// <exception cref="ArgumentException"></exception>
         public IEnumerable<T> RetrieveModels(Dictionary<string, object> keyValueDictionary, int limitCount = Configuration.LimitCount)
         {
-            if (keyValueDictionary == null || keyValueDictionary.Count == 0 || !CheckModelKeyValueDictionary(keyValueDictionary))
+            // if argument is null, then use empty dictionary
+            keyValueDictionary = keyValueDictionary ?? new Dictionary<string, object>();
+            
+            if (!CheckModelKeyValueDictionary(keyValueDictionary))
             {
                 throw new ArgumentException($"There are keys in given the dictionary that do not exist in model");
             }
@@ -235,7 +241,7 @@ namespace Sqlite.ORM
             var commandText = $@"
                     SELECT {propertiesSchema}
                     FROM {TableName}
-                    WHERE {propertiesValues}
+                    {(keyValueDictionary.Count > 0 ? $"WHERE {propertiesValues}" : $"{string.Empty}") }
                     LIMIT {limitCount};
                     ";
 
@@ -254,6 +260,7 @@ namespace Sqlite.ORM
                 retVal.Add(obj);
             }
             
+            // clean-up, necessary and important
             command.Dispose();
             reader.Dispose();
             Dispose();
@@ -267,34 +274,7 @@ namespace Sqlite.ORM
         /// <returns></returns>
         public IEnumerable<T> RetrieveAllModels(int limitCount = Configuration.LimitCount)
         {
-            var propertiesSchema = string.Join(',', ModelPropertiesNames);
-
-            var commandText = $@"
-                    SELECT {propertiesSchema}
-                    FROM {TableName}
-                    LIMIT {limitCount};
-                    ";
-
-            var command = CreateCommand(commandText);
-            var reader = command.ExecuteReader();
-
-            var retVal = new List<T>();
-
-            while (reader.Read())
-            {
-                var obj = CreateRawObject();
-                
-                // fill the object properties using the reader
-                SetObjectPropertiesFromReader(obj, obj.GetType(), reader);
-                
-                retVal.Add(obj);
-            }
-            
-            command.Dispose();
-            reader.Dispose();
-            Dispose();
-            
-            return retVal;
+            return RetrieveModels(new Dictionary<string, object>());
         }
 
         /// <summary>
@@ -510,6 +490,15 @@ namespace Sqlite.ORM
         public void Dispose()
         {
             SqliteConnection.Close();
+        }
+
+        /// <summary>
+        /// Rollback last operation, does not include read operations
+        /// </summary>
+        /// <returns></returns>
+        public void RollbackLastOperation()
+        {
+            Transactions.Last().Rollback();
         }
         
         #endregion
