@@ -37,10 +37,10 @@ namespace Sqlite.ORM
         /// </summary>
         public static readonly Dictionary<Type, SqliteTypes> DataTypeToSqliteTypeDictionary = new Dictionary<Type, SqliteTypes>()
         {
-            { typeof(double), SqliteTypes.Real },
-            { typeof(float), SqliteTypes.Real },
-            { typeof(long), SqliteTypes.Numeric },
             { typeof(int), SqliteTypes.Integer },
+            { typeof(long), SqliteTypes.Numeric },
+            { typeof(float), SqliteTypes.Real },
+            { typeof(double), SqliteTypes.Real },
             { typeof(string), SqliteTypes.Text }
         };
     }
@@ -576,13 +576,18 @@ namespace Sqlite.ORM
         /// <returns></returns>
         private static object DataConverterUponRetrieve(object data, Type type)
         {
-            if (data == null)
+            // this was needed otherwise code thorws an exception
+            switch (data)
             {
-                return null;
+                case null:
+                    return null;
+                case long _ when type != typeof(long):
+                    return Convert.ToInt32(data);
+                case double _ when type == typeof(float):
+                    return Convert.ToSingle(data);
             }
 
-            // this was needed otherwise code thorws an exception
-            return data is long ? Convert.ToInt32(data) : data;
+            return data;
         }
         
         #endregion

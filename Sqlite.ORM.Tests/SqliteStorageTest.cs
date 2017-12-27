@@ -16,11 +16,15 @@ namespace Sqlite.ORM.Tests
         public string LastName { get; set; }
         public int Age { get; set; }
         public double Height { get; set; }
-        // public byte[] Data { get; set; }
+        public float Worth { get; set; }
+        public long Weight { get; set; }
 
         public bool Equals(DummyTestClass other)
         {
-            return string.Equals(FirstName, other.FirstName) && string.Equals(LastName, other.LastName) && Age == other.Age && Height.Equals(other.Height);
+            if (ReferenceEquals(null, other)) return false;
+            if (ReferenceEquals(this, other)) return true;
+            return string.Equals(FirstName, other.FirstName) && string.Equals(LastName, other.LastName)
+                   && Age == other.Age && Height.Equals(other.Height) && Worth.Equals(other.Worth) && Weight == other.Weight;
         }
 
         public override bool Equals(object obj)
