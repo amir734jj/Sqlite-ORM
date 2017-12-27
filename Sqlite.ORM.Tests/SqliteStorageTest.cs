@@ -16,6 +16,7 @@ namespace Sqlite.ORM.Tests
         public string LastName { get; set; }
         public int Age { get; set; }
         public double Height { get; set; }
+        // public byte[] Data { get; set; }
 
         public bool Equals(DummyTestClass other)
         {
@@ -41,7 +42,26 @@ namespace Sqlite.ORM.Tests
             DataFixture = new Fixture();
             SqliteStorage = new SqliteStorage<DummyTestClass>();
             
+            // delete table
+            SqliteStorage.DeleteTable();
+
+            // re-create the table
+            SqliteStorage.CreateTable();
+            
             Dispose();
+        }
+        
+        [Fact]
+        public void Test__Store()
+        {
+            // Assign
+            var obj = DataFixture.Create<DummyTestClass>();
+
+            // Act
+            SqliteStorage.StoreModel(obj);
+
+            // Assert
+            Assert.Equal(1, SqliteStorage.GetCountOfModels());
         }
 
         [Fact]
@@ -71,7 +91,6 @@ namespace Sqlite.ORM.Tests
             // Assert
             Assert.Equal(0, SqliteStorage.GetCountOfModels());
         }
-
 
         [Fact]
         public void Test__Count()

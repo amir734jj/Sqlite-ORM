@@ -41,8 +41,7 @@ namespace Sqlite.ORM
             { typeof(float), SqliteTypes.Real },
             { typeof(long), SqliteTypes.Numeric },
             { typeof(int), SqliteTypes.Integer },
-            { typeof(string), SqliteTypes.Text },
-            { typeof(byte[]), SqliteTypes.Blob },
+            { typeof(string), SqliteTypes.Text }
         };
     }
     
@@ -118,7 +117,7 @@ namespace Sqlite.ORM
         /// <summary>
         /// Creates table given model type
         /// </summary>
-        private void CreateTable()
+        public void CreateTable()
         {
             var schema = string.Join(',', ModelProperties.Select(x =>
                 $"'{x.Name}' {DataType.DataTypeToSqliteTypeDictionary[x.PropertyType]}"));
@@ -134,6 +133,17 @@ namespace Sqlite.ORM
         #endregion
 
         #region FUNCTIONALITIES
+
+        /// <summary>
+        /// Run SQL commands directly against database
+        /// </summary>
+        /// <param name="commandText"></param>
+        public object DirectCommand(string commandText)
+        {
+            var command = SqliteConnection.CreateCommand();
+
+            return command.ExecuteScalar();
+        }
         
         /// <summary>
         /// Stores model into database
@@ -223,6 +233,8 @@ namespace Sqlite.ORM
             SetObjectPropertiesFromReader(obj, obj.GetType(), reader);
 
             command.Dispose();
+            reader.Dispose();
+            Dispose();
             
             return obj;
         }
@@ -269,7 +281,9 @@ namespace Sqlite.ORM
             }
             
             command.Dispose();
-            
+            reader.Dispose();
+            Dispose();
+
             return retVal;
         }
 
@@ -305,6 +319,8 @@ namespace Sqlite.ORM
             }
             
             command.Dispose();
+            reader.Dispose();
+            Dispose();
             
             return retVal;
         }
@@ -375,6 +391,18 @@ namespace Sqlite.ORM
         }
 
         /// <summary>
+        /// Deletes actual table
+        /// </summary>
+        public void DeleteTable()
+        {
+            var commandText = $@"
+                    DROP TABLE {TableName};
+                    ";
+            
+            CreateAndExecuteNonQueryCommand(commandText);
+        }
+
+        /// <summary>
         /// Get number of models in database
         /// </summary>
         /// <returns></returns>
@@ -385,7 +413,14 @@ namespace Sqlite.ORM
                     FROM {TableName};
                     ";
 
-            return Convert.ToInt32(CreateCommand(commandText).ExecuteScalar());
+
+            var command = CreateCommand(commandText);
+
+            var retVal = Convert.ToInt32(command.ExecuteScalar());
+            
+            command.Dispose();
+            
+            return retVal;
         }
         
         #endregion
@@ -475,6 +510,7 @@ namespace Sqlite.ORM
                 transaction.Commit();
                 transaction.Dispose();
                 command.Dispose();
+                Dispose();
             }
         }
         

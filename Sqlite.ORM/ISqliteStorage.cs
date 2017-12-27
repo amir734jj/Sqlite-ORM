@@ -4,6 +4,7 @@ namespace Sqlite.ORM
 {
     public interface ISqliteStorage<T>
     {
+        void CreateTable();
         void StoreModel(T obj);
         void StoreModels(IEnumerable<T> objects);
         T RetrieveModel(T model);
@@ -15,6 +16,7 @@ namespace Sqlite.ORM
         void DeleteModel(Dictionary<string, object> keyValueDictionary);
         void DeleteModels(Dictionary<string, object> keyValueDictionary, int limitCount = 100);
         void DeleteAllModels();
+        void DeleteTable();
         int GetCountOfModels();
     }
 }
