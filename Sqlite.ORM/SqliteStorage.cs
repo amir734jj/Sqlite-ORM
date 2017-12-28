@@ -295,7 +295,7 @@ namespace Sqlite.ORM
         }
 
         /// <summary>
-        /// Deletes all models from database
+        /// Deletes one model from database
         /// </summary>
         /// <param name="keyValueDictionary"></param>
         public void DeleteModel(Dictionary<string, object> keyValueDictionary)
