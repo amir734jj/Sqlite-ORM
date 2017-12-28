@@ -131,6 +131,22 @@ namespace Sqlite.ORM.Tests
         }
         
         [Fact]
+        public void Test__DeleteModels()
+        {
+            // Assign
+            const int countOfModels = 10;
+            var objects = DataFixture.CreateMany<DummyTestClass>(countOfModels).ToList();
+
+            // Act
+            SqliteStorage.StoreModels(objects);
+            SqliteStorage.DeleteModels(objects);
+
+            // Assert
+            Assert.Equal(0, SqliteStorage.GetCountOfModels());
+        }
+        
+        
+        [Fact]
         public void Test__RetrieveAll()
         {
             // Assign

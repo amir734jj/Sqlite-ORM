@@ -18,6 +18,7 @@ namespace Sqlite.ORM
         public const string TableNameSufix = "__TABLE";
         public static readonly string NewLine = Environment.NewLine;
         public const int LimitCount = 100;
+        public const string IdColumnName = "_Id";
 
         private const string DefaultDatabaseName = "db.sqlite";
         private static readonly string DefaultDatabaseFolderPath = Environment.CurrentDirectory;
@@ -69,7 +70,7 @@ namespace Sqlite.ORM
         private List<PropertyInfo> ModelProperties { get; set; }
         private List<string> ModelPropertiesNames { get; set; }
         private List<SqliteTransaction> Transactions { get; set; }
-
+        
         #region CONSTRUCTORS
         
         /// <inheritdoc />
@@ -138,7 +139,7 @@ namespace Sqlite.ORM
 
             var commandText = $@"
                     CREATE TABLE IF NOT EXISTS
-                        '{TableName}' ( {schema} );
+                        '{TableName}' ('{Configuration.IdColumnName}' INTEGER PRIMARY KEY AUTOINCREMENT, {schema} );
                     ";
 
             CreateAndExecuteNonQueryCommand(commandText);
@@ -299,16 +300,7 @@ namespace Sqlite.ORM
         /// <param name="keyValueDictionary"></param>
         public void DeleteModel(Dictionary<string, object> keyValueDictionary)
         {
-            var propertiesValues = string.Join("AND", keyValueDictionary.Select(keyValuePair =>
-                $"{keyValuePair.Key} = '{keyValuePair.Value}'"));
-            
-            var commandText = $@"
-                    DELETE FROM {TableName}
-                    WHERE {propertiesValues}
-                    LIMIT 1;
-                    ";
-            
-            CreateAndExecuteNonQueryCommand(commandText);
+            DeleteModels(keyValueDictionary, 1);
         }
         
         
@@ -329,13 +321,17 @@ namespace Sqlite.ORM
         public void DeleteModels(Dictionary<string, object> keyValueDictionary, int limitCount = Configuration.LimitCount)
         {
             var propertiesValues = string.Join("AND", keyValueDictionary.Select(keyValuePair => 
-                $"{keyValuePair.Key} = '{keyValuePair.Value}'"));
+                $" {keyValuePair.Key} = '{keyValuePair.Value}' "));
             
             var commandText = $@"
                     DELETE FROM {TableName}
-                    WHERE {propertiesValues}
-                    LIMIT {limitCount};
-                    ";
+                    WHERE {Configuration.IdColumnName} IN
+                    (
+                        SELECT {Configuration.IdColumnName}
+                        FROM {TableName}
+                        WHERE {propertiesValues}
+                        LIMIT {limitCount}
+                    );";
             
             CreateAndExecuteNonQueryCommand(commandText);
         }
