@@ -16,6 +16,7 @@ namespace Sqlite.ORM.Tests
         {
             _typeUtility = new TypeUtility();
             _fixture = new Fixture();
+            _fixture.Register(ObjectId.GenerateNewId);
         }
 
         [Fact]
@@ -35,6 +36,7 @@ namespace Sqlite.ORM.Tests
                 {"Parents.MotherName", typeof(string)},
                 {"Parents.FatherName", typeof(string)},
                 {"Parents.Status", typeof(bool)},
+                {"IdNumber", typeof(ObjectId)},
             };
             
             // Assing
@@ -93,6 +95,7 @@ namespace Sqlite.ORM.Tests
                 {"Parents.MotherName", fixtureInstance.Parents.MotherName},
                 {"Parents.FatherName", fixtureInstance.Parents.FatherName},
                 {"Parents.Status", fixtureInstance.Parents.Status},
+                {"IdNumber", fixtureInstance.IdNumber},
             };
 
             // Act
@@ -125,6 +128,7 @@ namespace Sqlite.ORM.Tests
                 {"Parents.MotherName", fixtureInstance.Parents.MotherName},
                 {"Parents.FatherName", fixtureInstance.Parents.FatherName},
                 {"Parents.Status", fixtureInstance.Parents.Status},
+                {"IdNumber", fixtureInstance.IdNumber},
             };
 
             // Act

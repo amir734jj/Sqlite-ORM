@@ -16,10 +16,38 @@ namespace Sqlite.ORM.Tests
         }
     }    
     
-    public class DummyNestedTestClass {
+    public class DummyNestedTestClass : IEquatable<DummyNestedTestClass>{
         public string MotherName { get; set; }
         public string FatherName { get; set; }
         public bool Status { get; set; }
+
+        public bool Equals(DummyNestedTestClass other)
+        {
+            if (ReferenceEquals(null, other)) return false;
+            if (ReferenceEquals(this, other)) return true;
+            return string.Equals(MotherName, other.MotherName)
+                   && string.Equals(FatherName, other.FatherName)
+                   && Status == other.Status;
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (ReferenceEquals(null, obj)) return false;
+            if (ReferenceEquals(this, obj)) return true;
+            if (obj.GetType() != this.GetType()) return false;
+            return Equals((DummyNestedTestClass) obj);
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                var hashCode = (MotherName != null ? MotherName.GetHashCode() : 0);
+                hashCode = (hashCode * 397) ^ (FatherName != null ? FatherName.GetHashCode() : 0);
+                hashCode = (hashCode * 397) ^ Status.GetHashCode();
+                return hashCode;
+            }
+        }
     }
     
     public class DummyTestClass : IEquatable<DummyTestClass>
@@ -39,10 +67,15 @@ namespace Sqlite.ORM.Tests
         {
             if (ReferenceEquals(null, other)) return false;
             if (ReferenceEquals(this, other)) return true;
-            return string.Equals(FirstName, other.FirstName) && string.Equals(LastName, other.LastName)
-                   && Age == other.Age && Height.Equals(other.Height) && Worth.Equals(other.Worth)
-                   && Weight == other.Weight && DateOfBirth.TrimMilliseconds().Equals(other.DateOfBirth.TrimMilliseconds())
-                   && Initial == other.Initial;
+            return string.Equals(FirstName, other.FirstName)
+                   && string.Equals(LastName, other.LastName)
+                   && Age == other.Age && Height.Equals(other.Height)
+                   && Worth.Equals(other.Worth)
+                   && Weight == other.Weight
+                   && DateOfBirth.TrimMilliseconds().Equals(other.DateOfBirth.TrimMilliseconds())
+                   && Initial == other.Initial
+                   && Equals(Parents, other.Parents)
+                   && IdNumber.Equals(other.IdNumber);
         }
 
         public override bool Equals(object obj)
