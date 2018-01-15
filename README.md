@@ -80,5 +80,5 @@ int Count();
 
 - - - -
 ## Issues:
-- Code does not support IEnumerable property types, that is the next priority to fix.
+- Code does not support `IEnumerable` property types, that is the next priority to fix.
 
