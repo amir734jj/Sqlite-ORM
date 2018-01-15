@@ -1,7 +1,7 @@
 # SQLite-ORM
 Simple SQLite ORM, easy and intuitive to use. This ORM follows code-first design, but you can use database-first design as long as database schema matches type conversions. The code does support complex types and custom serializer and de-serializer for custom types. The only dependency is:  [`Microsoft.Data.SQLite`](https://github.com/aspnet/Microsoft.Data.Sqlite).
 
-[# Nuget](https://www.nuget.org/packages/Sqlite.ORM/)
+[Nuget Link](https://www.nuget.org/packages/Sqlite.ORM/)
 
 ```C#
 // initialize new instance
