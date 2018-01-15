@@ -78,3 +78,7 @@ int Count();
 
 - unit tests actually pass locally, Travis-CI for .NET core is still in beta, so I don't know what is wrong.
 
+- - - -
+## Issues:
+- Code does not support IEnumerable property types, that is the next priority to fix.
+
