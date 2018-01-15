@@ -120,6 +120,7 @@ namespace Sqlite.ORM
             // add custom types to type utility
             foreach (var (type, _) in _customTypes)
             {
+                // this is needed so recursive algorithm would not try to digest the custom class to find system type
                 _typeUtility.AddLeafType(type);
                 
                 // default to text always
