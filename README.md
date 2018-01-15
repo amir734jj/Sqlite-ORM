@@ -9,12 +9,12 @@ var SqliteStorage = new SqliteStorage<DummyTestClass>();
 var obj = new DummyTestClass();
 
 // store object
-SqliteStorage.StoreModel(obj);
+SqliteStorage.Add(obj);
 
 // get count of objects
-Console.WriteLine(1 == SqliteStorage.GetCountOfModels());
+Console.WriteLine(1 == SqliteStorage.Count());
 
 // given object instance with some property values filled, it then finds
 // the object from database that matches those filled properties
-Console.WriteLine(obj == SqliteStorage.RetrieveModel(obj));
+Console.WriteLine(obj == SqliteStorage.Find(obj));
 ```
