@@ -37,17 +37,6 @@ namespace Sqlite.ORM.Tests
             if (obj.GetType() != this.GetType()) return false;
             return Equals((DummyNestedTestClass) obj);
         }
-
-        public override int GetHashCode()
-        {
-            unchecked
-            {
-                var hashCode = (MotherName != null ? MotherName.GetHashCode() : 0);
-                hashCode = (hashCode * 397) ^ (FatherName != null ? FatherName.GetHashCode() : 0);
-                hashCode = (hashCode * 397) ^ Status.GetHashCode();
-                return hashCode;
-            }
-        }
     }
     
     public class DummyTestClass : IEquatable<DummyTestClass>
