@@ -25,6 +25,7 @@ namespace Sqlite.ORM.Interfaces
 
         // find method overloads
         void Delete(T model);
+        void Delete(Func<T, bool> filter);
         void Delete(List<T> models);
         void Delete(Dictionary<string, object> keyValueDictionary, int limitCount = 100);
 
@@ -35,6 +36,7 @@ namespace Sqlite.ORM.Interfaces
         void DeleteTable();
 
         // update method overloads
+        void Update(Func<T, bool> filter, T destination);
         void Update(T source, T destination);
         void Update(Dictionary<string, object> source, Dictionary<string, object> destination, int limitCount = 1);
 

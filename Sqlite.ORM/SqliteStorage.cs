@@ -348,6 +348,17 @@ namespace Sqlite.ORM
         }
         
         /// <summary>
+        /// Updates a model given source of type of filter and destination
+        /// </summary>
+        /// <param name="filter"></param>
+        /// <param name="destination"></param>
+        /// <returns></returns>
+        public void Update(Func<T, bool> filter, T destination)
+        {
+            Update(ConvertModelToDictionary(Find(filter)), ConvertModelToDictionary(destination));
+        }
+        
+        /// <summary>
         /// Updates a model given source and destination
         /// </summary>
         /// <param name="source"></param>
@@ -390,6 +401,15 @@ namespace Sqlite.ORM
             CreateAndExecuteNonQueryCommand(commandText);
         }
 
+        /// <summary>
+        /// Deletes object model from database given filter function
+        /// </summary>
+        /// <param name="filter"></param>
+        public void Delete(Func<T, bool> filter)
+        {
+            Delete(Find(filter));
+        }
+        
         /// <summary>
         /// Deletes object model from database
         /// </summary>
