@@ -66,3 +66,10 @@ void Update(Dictionary<string, object> source, Dictionary<string, object> destin
 // count of records in table
 int Count();
 ```
+
+- - - -
+
+## Notes:
+I started this project because I could not find a good ORM for SQL, similar to what [`LiteDB`](https://github.com/mbdavid/LiteDB) does for C# Mongo community. It is not the fastest ORM but it is very simple and intuitive. Please feel free to contribute to this project.
+
+
