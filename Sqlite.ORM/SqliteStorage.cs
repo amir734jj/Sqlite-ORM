@@ -74,7 +74,10 @@ namespace Sqlite.ORM
         private readonly List<string> _modelPropertiesNames;
         private readonly List<SqliteTransaction> _transactions;
         private readonly ITypeUtility _typeUtility;
-
+        
+        // this is used to make ORM thread safe
+        private static readonly object _lock = new object();
+        
         #region CONSTRUCTORS
         
         /// <inheritdoc />
@@ -130,9 +133,12 @@ namespace Sqlite.ORM
                 Mode = SqliteOpenMode.ReadWriteCreate,
                 Cache = SqliteCacheMode.Private            
             };
-
-            _sqliteConnection = new SqliteConnection(connectionString.ToString());
-            _sqliteConnection.Open();
+            
+            lock (_lock)
+            {
+                _sqliteConnection = new SqliteConnection(connectionString.ToString());
+                _sqliteConnection.Open();
+            }
         }
 
         
@@ -164,7 +170,7 @@ namespace Sqlite.ORM
         {
             var command = _sqliteConnection.CreateCommand();
 
-            return command.ExecuteScalar();
+            return ExecuteScalar(command);
         }
         
         /// <summary>
@@ -265,6 +271,7 @@ namespace Sqlite.ORM
             var propertiesSchema = string.Join(',', _modelPropertiesNames.Select(x => $"`{x}`"));
             var propertiesValues = DictionaryToAndClause(keyValueDictionary);
             
+            
             var commandText = $@"
                     SELECT {propertiesSchema}
                     FROM {_tableName}
@@ -273,7 +280,7 @@ namespace Sqlite.ORM
                     ";
 
             var command = CreateCommand(commandText);
-            var reader = command.ExecuteReader();
+            var reader = ExecuteReader(command);
             
             var retVal = new List<T>();
 
@@ -415,7 +422,7 @@ namespace Sqlite.ORM
 
             var command = CreateCommand(commandText);
 
-            var retVal = Convert.ToInt32(command.ExecuteScalar());
+            var retVal = Convert.ToInt32(ExecuteScalar(command));
             
             command.Dispose();
             
@@ -425,6 +432,38 @@ namespace Sqlite.ORM
         #endregion
         
         #region HELPERS
+
+        /// <summary>
+        /// Executes a reader
+        /// </summary>
+        /// <param name="command"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentNullException"></exception>
+        private SqliteDataReader ExecuteReader(SqliteCommand command)
+        {
+            if (command == null) throw new ArgumentNullException(nameof(command));
+            
+            lock (_lock)
+            {
+                return command.ExecuteReader();
+            }
+        }
+        
+        /// <summary>
+        /// Executes a command
+        /// </summary>
+        /// <param name="command"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentNullException"></exception>
+        private object ExecuteScalar(SqliteCommand command)
+        {
+            if (command == null) throw new ArgumentNullException(nameof(command));
+            
+            lock (_lock)
+            {
+                return command.ExecuteScalar();
+            }
+        }
 
         private string ObjectToStatementClause(T obj)
         {
@@ -522,32 +561,35 @@ namespace Sqlite.ORM
         /// <returns></returns>
         private void CreateAndExecuteNonQueryCommand(string commandText)
         {
-            if (_sqliteConnection.State != ConnectionState.Open)
+            lock (_lock)
             {
-                _sqliteConnection.Open();
-            }
+                if (_sqliteConnection.State != ConnectionState.Open)
+                {
+                    _sqliteConnection.Open();
+                }
 
-            var transaction = _sqliteConnection.BeginTransaction();
-            var command = _sqliteConnection.CreateCommand();
-            command.Transaction = transaction;
-            
-            _transactions.Add(transaction);
-            
-            try
-            {             
-                command.CommandText = commandText;
-                command.ExecuteNonQuery();
-            }
-            catch (Exception e)
-            {
-                throw new ArgumentException(e?.Message + commandText);
-            }
-            finally
-            {
-                transaction.Commit();
-                transaction.Dispose();
-                command.Dispose();
-                Dispose();
+                var transaction = _sqliteConnection.BeginTransaction();
+                var command = _sqliteConnection.CreateCommand();
+                command.Transaction = transaction;
+
+                _transactions.Add(transaction);
+
+                try
+                {
+                    command.CommandText = commandText;
+                    command.ExecuteNonQuery();
+                }
+                catch (Exception e)
+                {
+                    throw new ArgumentException(e?.Message + commandText);
+                }
+                finally
+                {
+                    transaction.Commit();
+                    transaction.Dispose();
+                    command.Dispose();
+                    Dispose();
+                }
             }
         }
         
