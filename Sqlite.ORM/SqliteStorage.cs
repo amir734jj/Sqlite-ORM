@@ -5,7 +5,9 @@ using System.Data;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
+using Sqlite.ORM.Interfaces;
 
 namespace Sqlite.ORM
 {
@@ -50,7 +52,8 @@ namespace Sqlite.ORM
             { typeof(double), SqliteTypes.Real },
             { typeof(string), SqliteTypes.Text },
             { typeof(DateTime), SqliteTypes.Text },
-            { typeof(char), SqliteTypes.Text }
+            { typeof(char), SqliteTypes.Text },
+            { typeof(bool), SqliteTypes.Text }
         };
     }
 
@@ -64,13 +67,14 @@ namespace Sqlite.ORM
     /// </summary>
     public class SqliteStorage<T> : ISqliteStorage<T>, IDisposable
     {
-        private string DataBaseStoragePath { get; set; }
-        private SqliteConnection SqliteConnection { get; set; }
-        private string TableName { get; set; }
-        private List<PropertyInfo> ModelProperties { get; set; }
-        private List<string> ModelPropertiesNames { get; set; }
-        private List<SqliteTransaction> Transactions { get; set; }
-        
+        private readonly string _dataBaseStoragePath;
+        private SqliteConnection _sqliteConnection;
+        private readonly string _tableName;
+        private readonly Dictionary<string, Type> _modelProperties;
+        private readonly List<string> _modelPropertiesNames;
+        private readonly List<SqliteTransaction> _transactions;
+        private readonly ITypeUtility _typeUtility;
+
         #region CONSTRUCTORS
         
         /// <inheritdoc />
@@ -78,7 +82,7 @@ namespace Sqlite.ORM
         /// Parameterless constructor
         /// </summary>
         public SqliteStorage() : this(Configuration.DefaultDataBaseStoragePath) { }
-        
+
         /// <summary>
         /// Constructor
         /// </summary>
@@ -86,19 +90,22 @@ namespace Sqlite.ORM
         public SqliteStorage(string dataBaseStoragePath)
         {
             // set table name
-            TableName = Configuration.TableNamePrefix + typeof(T).Name.ToUpper() + Configuration.TableNameSufix;
+            _tableName = Configuration.TableNamePrefix + typeof(T).Name.ToUpper() + Configuration.TableNameSufix;
 
             // set database storgae path
-            DataBaseStoragePath = dataBaseStoragePath;
+            _dataBaseStoragePath = dataBaseStoragePath;
             
+            // create a type utility instance
+            _typeUtility = new TypeUtility();
+
             // initialize transactions list
-            Transactions = new List<SqliteTransaction>();
+            _transactions = new List<SqliteTransaction>();
             
             // set model properties
-            ModelProperties = typeof(T).GetProperties().ToList();
+            _modelProperties = _typeUtility.TypeToDictionary(typeof(T));
             
             // set model properties names
-            ModelPropertiesNames = ModelProperties.Select(x => x.Name).ToList();
+            _modelPropertiesNames = _modelProperties.Keys.ToList();
 
             // connect to database
             Connect();
@@ -106,7 +113,7 @@ namespace Sqlite.ORM
             // create table
             CreateTable();
             
-            Console.WriteLine($"Connection string: {SqliteConnection.ConnectionString}");
+            Console.WriteLine($"Connection string: {_sqliteConnection.ConnectionString}");
         }
         
         #endregion
@@ -119,13 +126,13 @@ namespace Sqlite.ORM
         private void Connect()
         {
             var connectionString = new SqliteConnectionStringBuilder {
-                DataSource = DataBaseStoragePath,
+                DataSource = _dataBaseStoragePath,
                 Mode = SqliteOpenMode.ReadWriteCreate,
                 Cache = SqliteCacheMode.Private            
             };
 
-            SqliteConnection = new SqliteConnection(connectionString.ToString());
-            SqliteConnection.Open();
+            _sqliteConnection = new SqliteConnection(connectionString.ToString());
+            _sqliteConnection.Open();
         }
 
         
@@ -134,12 +141,12 @@ namespace Sqlite.ORM
         /// </summary>
         public void CreateTable()
         {
-            var schema = string.Join(',', ModelProperties.Select(x =>
-                $"'{x.Name}' {DataType.DataTypeToSqliteTypeDictionary[x.PropertyType]}"));
+            var schema = string.Join(',', _modelProperties.Select(x =>
+                $"`{x.Key}` {DataType.DataTypeToSqliteTypeDictionary[x.Value]}"));
 
             var commandText = $@"
                     CREATE TABLE IF NOT EXISTS
-                        '{TableName}' ('{Configuration.IdColumnName}' INTEGER PRIMARY KEY AUTOINCREMENT, {schema} );
+                        '{_tableName}' ('{Configuration.IdColumnName}' INTEGER PRIMARY KEY AUTOINCREMENT, {schema} );
                     ";
 
             CreateAndExecuteNonQueryCommand(commandText);
@@ -155,7 +162,7 @@ namespace Sqlite.ORM
         /// <param name="commandText"></param>
         public object DirectCommand(string commandText)
         {
-            var command = SqliteConnection.CreateCommand();
+            var command = _sqliteConnection.CreateCommand();
 
             return command.ExecuteScalar();
         }
@@ -164,14 +171,13 @@ namespace Sqlite.ORM
         /// Stores model into database
         /// </summary>
         /// <param name="obj"></param>
-        public void StoreModel (T obj)
+        public void Add (T obj)
         {
-            var propertiesSchema = string.Join(',', ModelPropertiesNames);
-            var propertiesValues = string.Join(',', ModelProperties.Select(x =>
-                $"'{DataConverterUponStore(obj.GetType().GetProperty(x.Name).GetValue(obj, null), x.PropertyType)}'"));
+            var propertiesSchema = string.Join(',', _modelPropertiesNames.Select(x => $"`{x}`"));
+            var propertiesValues = ObjectToStatementClause(obj);
             
             var commandText = $@"
-                    INSERT INTO {TableName}
+                    INSERT INTO {_tableName}
                         ({propertiesSchema})
                     VALUES
                         ({propertiesValues});
@@ -185,16 +191,13 @@ namespace Sqlite.ORM
         /// Stores list of models into database
         /// </summary>
         /// <param name="objects"></param>
-        public void StoreModels(IEnumerable<T> objects)
+        public void AddAll(IEnumerable<T> objects)
         {
-            var propertiesSchema = string.Join(',', ModelPropertiesNames);
-            var propertiesValues = string.Join(',', objects.Select(obj => {
-                return '(' + string.Join(',', ModelProperties.Select(x =>
-                    $"'{DataConverterUponStore(obj.GetType().GetProperty(x.Name).GetValue(obj, null), x.PropertyType)}'")) + ')';
-            }));
+            var propertiesSchema = string.Join(',', _modelPropertiesNames.Select(x => $"`{x}`"));
+            var propertiesValues = string.Join(',', objects.Select(obj => $"( {ObjectToStatementClause(obj)}) "));
 
             var commandText = $@"
-                    INSERT INTO {TableName}
+                    INSERT INTO {_tableName}
                         ({propertiesSchema})
                     VALUES
                         {propertiesValues};
@@ -203,15 +206,14 @@ namespace Sqlite.ORM
             CreateAndExecuteNonQueryCommand(commandText);
         }
 
-
         /// <summary>
         /// Retrieves a model from database
         /// </summary>
         /// <param name="model"></param>
         /// <returns></returns>
-        public T RetrieveModel(T model)
+        public T Find(T model)
         {
-            return RetrieveModel(ConvertModelToDictionary(model));
+            return Find(ConvertModelToDictionary(model));
         }
 
         /// <summary>
@@ -219,12 +221,30 @@ namespace Sqlite.ORM
         /// </summary>
         /// <param name="keyValueDictionary"></param>
         /// <returns></returns>
-        /// <exception cref="ArgumentException"></exception>
-        public T RetrieveModel(Dictionary<string, object> keyValueDictionary)
+        public T Find(Dictionary<string, object> keyValueDictionary)
         {
-            return RetrieveModels(keyValueDictionary, 1).FirstOrDefault();
+            return FindAll(keyValueDictionary, 1).FirstOrDefault();
         }
-
+        
+        /// <summary>
+        /// Retrieves all model from database
+        /// </summary>
+        /// <param name="model"></param>
+        /// <returns></returns>
+        public IEnumerable<T> FindAll(T model)
+        {
+            return FindAll(ConvertModelToDictionary(model));
+        }
+        
+        /// <summary>
+        /// Retrieves all models
+        /// </summary>
+        /// <returns></returns>
+        public IEnumerable<T> FindAll(int limitCount = Configuration.LimitCount)
+        {
+            return FindAll(new Dictionary<string, object>());
+        }
+        
         /// <summary>
         /// Given key value pair of property and property values, it returns an object
         /// </summary>
@@ -232,7 +252,7 @@ namespace Sqlite.ORM
         /// <param name="limitCount"></param>
         /// <returns></returns>
         /// <exception cref="ArgumentException"></exception>
-        public IEnumerable<T> RetrieveModels(Dictionary<string, object> keyValueDictionary, int limitCount = Configuration.LimitCount)
+        public IEnumerable<T> FindAll(Dictionary<string, object> keyValueDictionary, int limitCount = Configuration.LimitCount)
         {
             // if argument is null, then use empty dictionary
             keyValueDictionary = keyValueDictionary ?? new Dictionary<string, object>();
@@ -242,13 +262,12 @@ namespace Sqlite.ORM
                 throw new ArgumentException($"There are keys in given the dictionary that do not exist in model");
             }
             
-            var propertiesSchema = string.Join(',', ModelPropertiesNames);
-            var propertiesValues = string.Join("AND", keyValueDictionary.Select(keyValuePair =>
-                $" {keyValuePair.Key} = '{keyValuePair.Value}' "));
+            var propertiesSchema = string.Join(',', _modelPropertiesNames.Select(x => $"`{x}`"));
+            var propertiesValues = DictionaryToAndClause(keyValueDictionary);
             
             var commandText = $@"
                     SELECT {propertiesSchema}
-                    FROM {TableName}
+                    FROM {_tableName}
                     {(keyValueDictionary.Count > 0 ? $"WHERE {propertiesValues}" : $"{string.Empty}") }
                     LIMIT {limitCount};
                     ";
@@ -260,7 +279,7 @@ namespace Sqlite.ORM
 
             while (reader.Read())
             {
-                var obj = CreateRawObject();
+                var obj = (T) _typeUtility.GetDefaultOfType(typeof(T));
                 
                 // fill object properties using the reader
                 SetObjectPropertiesFromReader(obj, obj.GetType(), reader);
@@ -275,42 +294,66 @@ namespace Sqlite.ORM
 
             return retVal;
         }
+        
+        /// <summary>
+        /// Updates a model given source and destination
+        /// </summary>
+        /// <param name="source"></param>
+        /// <param name="destination"></param>
+        /// <returns></returns>
+        public void Update(T source, T destination)
+        {
+            Update(ConvertModelToDictionary(source), ConvertModelToDictionary(destination));
+        }
 
         /// <summary>
-        /// Retrieves all models
+        /// Updates data structure
         /// </summary>
-        /// <returns></returns>
-        public IEnumerable<T> RetrieveAllModels(int limitCount = Configuration.LimitCount)
+        /// <param name="source"></param>
+        /// <param name="destination"></param>
+        /// <param name="limitCount"></param>
+        /// <exception cref="ArgumentException"></exception>
+        public void Update(Dictionary<string, object> source, Dictionary<string, object> destination, int limitCount = 1)
         {
-            return RetrieveModels(new Dictionary<string, object>());
+            if (!(CheckModelKeyValueDictionary(source) && CheckModelKeyValueDictionary(destination) && destination.Count > 0))
+            {
+                throw new ArgumentException($"There are keys in given the dictionary that do not exist in model");
+            }
+            
+            var propertiesSchema = string.Join(',', _modelPropertiesNames.Select(x => $"`{x}`"));
+            var originalPropertiesValues = DictionaryToAndClause(source);
+            var newPropertiesValues = DictionaryToJoinClause(destination);
+            
+            var commandText = $@"
+                    UPDATE {_tableName}
+                    SET {newPropertiesValues}
+                    WHERE {Configuration.IdColumnName} IN (
+                        SELECT {Configuration.IdColumnName}
+                        FROM {_tableName}
+                        {(source.Count > 0 ? $"WHERE {originalPropertiesValues}" : $"{string.Empty}") }
+                        LIMIT {limitCount}
+                    );
+            ";
+
+            CreateAndExecuteNonQueryCommand(commandText);
         }
 
         /// <summary>
         /// Deletes object model from database
         /// </summary>
-        /// <param name="models"></param>
-        public void DeleteModel(T models)
+        /// <param name="model"></param>
+        public void Delete(T model)
         {
-            DeleteModel(ConvertModelToDictionary(models));
+            Delete(ConvertModelToDictionary(model));
         }
-
-        /// <summary>
-        /// Deletes one model from database
-        /// </summary>
-        /// <param name="keyValueDictionary"></param>
-        public void DeleteModel(Dictionary<string, object> keyValueDictionary)
-        {
-            DeleteModels(keyValueDictionary, 1);
-        }
-        
         
         /// <summary>
         /// Deletes all models from list of models
         /// </summary>
         /// <param name="models"></param>
-        public void DeleteModels(List<T> models)
+        public void Delete(List<T> models)
         {
-            models.ForEach(x => DeleteModel(ConvertModelToDictionary(x)));
+            models.ForEach(x => Delete(ConvertModelToDictionary(x)));
         }
 
         /// <summary>
@@ -318,17 +361,16 @@ namespace Sqlite.ORM
         /// </summary>
         /// <param name="keyValueDictionary"></param>
         /// <param name="limitCount"></param>
-        public void DeleteModels(Dictionary<string, object> keyValueDictionary, int limitCount = Configuration.LimitCount)
+        public void Delete(Dictionary<string, object> keyValueDictionary, int limitCount = Configuration.LimitCount)
         {
-            var propertiesValues = string.Join("AND", keyValueDictionary.Select(keyValuePair => 
-                $" {keyValuePair.Key} = '{keyValuePair.Value}' "));
+            var propertiesValues = DictionaryToAndClause(keyValueDictionary);
             
             var commandText = $@"
-                    DELETE FROM {TableName}
+                    DELETE FROM {_tableName}
                     WHERE {Configuration.IdColumnName} IN
                     (
                         SELECT {Configuration.IdColumnName}
-                        FROM {TableName}
+                        FROM {_tableName}
                         WHERE {propertiesValues}
                         LIMIT {limitCount}
                     );";
@@ -339,10 +381,10 @@ namespace Sqlite.ORM
         /// <summary>
         /// Deletes all models from table
         /// </summary>
-        public void DeleteAllModels()
+        public void DeleteAll()
         {
             var commandText = $@"
-                    DELETE FROM {TableName};
+                    DELETE FROM {_tableName};
                     ";
             
             CreateAndExecuteNonQueryCommand(commandText);
@@ -354,7 +396,7 @@ namespace Sqlite.ORM
         public void DeleteTable()
         {
             var commandText = $@"
-                    DROP TABLE {TableName};
+                    DROP TABLE {_tableName};
                     ";
             
             CreateAndExecuteNonQueryCommand(commandText);
@@ -368,7 +410,7 @@ namespace Sqlite.ORM
         {
             var commandText = $@"
                     SELECT COUNT (*)
-                    FROM {TableName};
+                    FROM {_tableName};
                     ";
 
             var command = CreateCommand(commandText);
@@ -383,6 +425,44 @@ namespace Sqlite.ORM
         #endregion
         
         #region HELPERS
+
+        private string ObjectToStatementClause(T obj)
+        {
+            return string.Join(',', _modelProperties.Select(x =>
+                $"'{DataConverterUponQuery(_typeUtility.GetPropertyValue(x.Key, obj, typeof(T)), x.Value)}'"));
+        }
+
+        /// <summary>
+        /// Dictionary to "AND" clause
+        /// </summary>
+        /// <param name="dictionary"></param>
+        /// <returns></returns>
+        private string DictionaryToAndClause(Dictionary<string, object> dictionary)
+        {
+            return DictionaryToClause(dictionary, "AND");
+        }
+        
+        /// <summary>
+        /// Dictionary to "AND" clause
+        /// </summary>
+        /// <param name="dictionary"></param>
+        /// <returns></returns>
+        private string DictionaryToJoinClause(Dictionary<string, object> dictionary)
+        {
+            return DictionaryToClause(dictionary, ",");
+        }
+
+        /// <summary>
+        /// Creates a "SET" clause from key/value dictionary representation of an object
+        /// </summary>
+        /// <param name="dictionary"></param>
+        /// <param name="joinBy"></param>
+        /// <returns></returns>
+        private string DictionaryToClause(Dictionary<string, object> dictionary, string joinBy)
+        {
+            return string.Join(joinBy, dictionary.Select(keyValuePair => 
+                $" `{keyValuePair.Key}` = '{DataConverterUponQuery(keyValuePair.Value, _modelProperties[keyValuePair.Key])}' "));
+        }
         
         /// <summary>
         /// Checks of all properties in key value dictionary do exist in model
@@ -391,7 +471,7 @@ namespace Sqlite.ORM
         /// <returns></returns>
         private bool CheckModelKeyValueDictionary(Dictionary<string, object> keyValueDictionary)
         {
-            return keyValueDictionary.All(propertyName => ModelPropertiesNames.Contains(propertyName.Key));
+            return keyValueDictionary.All(propertyName => _modelPropertiesNames.Contains(propertyName.Key));
         }
 
         /// <summary>
@@ -412,11 +492,11 @@ namespace Sqlite.ORM
         /// <param name="reader"></param>
         private void SetObjectPropertiesFromReader(T obj, Type objectType, IDataRecord reader)
         {
-            foreach (var property in ModelProperties)
+            foreach (var (propertyName, propertyType) in _modelProperties)
             {
-                var value = reader[property.Name] ?? GetDefaultOfType(property.PropertyType);
+                var value = reader[propertyName] ?? GetDefaultOfType(propertyType);
                 
-                objectType.GetProperty(property.Name).SetValue(obj, DataConverterUponRetrieve(value, property.PropertyType), null);
+                _typeUtility.SetPropertyValue(propertyName, obj, DataConverterUponRetrieve(value, propertyType));
             }
         }
 
@@ -427,12 +507,12 @@ namespace Sqlite.ORM
         /// <returns></returns>
         private SqliteCommand CreateCommand(string commandText)
         {
-            if (SqliteConnection.State != ConnectionState.Open)
+            if (_sqliteConnection.State != ConnectionState.Open)
             {
-                SqliteConnection.Open();
+                _sqliteConnection.Open();
             }
 
-            return new SqliteCommand(commandText, SqliteConnection);
+            return new SqliteCommand(commandText, _sqliteConnection);
         }
 
         /// <summary>
@@ -442,16 +522,16 @@ namespace Sqlite.ORM
         /// <returns></returns>
         private void CreateAndExecuteNonQueryCommand(string commandText)
         {
-            if (SqliteConnection.State != ConnectionState.Open)
+            if (_sqliteConnection.State != ConnectionState.Open)
             {
-                SqliteConnection.Open();
+                _sqliteConnection.Open();
             }
 
-            var transaction = SqliteConnection.BeginTransaction();
-            var command = SqliteConnection.CreateCommand();
+            var transaction = _sqliteConnection.BeginTransaction();
+            var command = _sqliteConnection.CreateCommand();
             command.Transaction = transaction;
             
-            Transactions.Add(transaction);
+            _transactions.Add(transaction);
             
             try
             {             
@@ -478,11 +558,7 @@ namespace Sqlite.ORM
         /// <returns></returns>
         private Dictionary<string, object> ConvertModelToDictionary(T obj)
         {
-            var objectType = obj.GetType();
-
-            return ModelProperties
-                .Where(x => objectType.GetProperty(x.Name).GetValue(obj, null) != null)
-                .ToDictionary(x => x.Name, x => objectType.GetProperty(x.Name).GetValue(obj, null));
+            return _modelProperties.ToDictionary(x => x.Key, y => _typeUtility.GetPropertyValue(y.Key, obj, typeof(T)));
         }
         
 
@@ -492,7 +568,7 @@ namespace Sqlite.ORM
         /// </summary>
         public void Dispose()
         {
-            SqliteConnection.Close();
+            _sqliteConnection.Close();
         }
 
         /// <summary>
@@ -501,7 +577,7 @@ namespace Sqlite.ORM
         /// <returns></returns>
         public void RollbackLastOperation()
         {
-            Transactions.Last().Rollback();
+            _transactions.Last().Rollback();
         }
         
         #endregion
@@ -524,7 +600,7 @@ namespace Sqlite.ORM
         /// <param name="value"></param>
         /// <param name="type"></param>
         /// <returns></returns>
-        private static object DataConverterUponStore(object value, Type type)
+        private static object DataConverterUponQuery(object value, Type type)
         {
             if (value == null && type == typeof(string))
             {
@@ -533,8 +609,8 @@ namespace Sqlite.ORM
 
             // see this: https://stackoverflow.com/a/11912432/1834787
             if (value is char || value is string)
-            {                
-                value = value.ToString().Replace("'", @"''");
+            {
+                value = new Regex("[']").Replace(value.ToString(), "''");
             }
 
             return value;
@@ -561,11 +637,13 @@ namespace Sqlite.ORM
                     return DateTime.Parse((string) data);
                 case string _ when type == typeof(char):
                     return Convert.ToChar(data);
+                case string _ when type == typeof(bool):
+                    return Convert.ToBoolean(data);
             }
 
             return data;
         }
-        
+
         #endregion
     }
 }

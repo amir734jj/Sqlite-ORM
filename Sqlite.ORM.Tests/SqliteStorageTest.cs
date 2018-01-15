@@ -1,60 +1,17 @@
 using System;
 using Xunit;
 using Sqlite.ORM;
-using Ploeh.AutoFixture;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
+using AutoFixture;
+using Sqlite.ORM.Interfaces;
 
 // this should stop running tests in parallel
 [assembly: CollectionBehavior(DisableTestParallelization = true)]
 
 namespace Sqlite.ORM.Tests
 {
-    public static class DateTimeExtension {
-        
-        /// <summary>
-        /// The is needed, because ToString of DateTime does not include the millisecond portion,
-        /// hence, we trimmed the millisecond before equality check
-        /// </summary>
-        /// <param name="dt"></param>
-        /// <returns></returns>
-        public static DateTime TrimMilliseconds(this DateTime dt)
-        {
-            return new DateTime(dt.Year, dt.Month, dt.Day, dt.Hour, dt.Minute, dt.Second, 0);
-        }
-    }
-    
-    public class DummyTestClass : IEquatable<DummyTestClass>
-    {
-        public string FirstName { get; set; }
-        public string LastName { get; set; }
-        public int Age { get; set; }
-        public double Height { get; set; }
-        public float Worth { get; set; }
-        public long Weight { get; set; }
-        public DateTime DateOfBirth { get; set; }
-        public char Initial { get; set; }
-
-
-        public bool Equals(DummyTestClass other)
-        {
-            if (ReferenceEquals(null, other)) return false;
-            if (ReferenceEquals(this, other)) return true;
-            return string.Equals(FirstName, other.FirstName) && string.Equals(LastName, other.LastName)
-                   && Age == other.Age && Height.Equals(other.Height) && Worth.Equals(other.Worth)
-                   && Weight == other.Weight && DateOfBirth.TrimMilliseconds().Equals(other.DateOfBirth.TrimMilliseconds())
-                   && Initial == other.Initial;
-        }
-
-        public override bool Equals(object obj)
-        {
-            if (ReferenceEquals(null, obj)) return false;
-            if (ReferenceEquals(this, obj)) return true;
-            if (obj.GetType() != this.GetType()) return false;
-            return Equals((DummyTestClass) obj);
-        }
-    }
-    
     [Collection("Sequential")]
     public class SqliteStorageTest : IDisposable
     {
@@ -71,6 +28,7 @@ namespace Sqlite.ORM.Tests
 
             // re-create the table
             SqliteStorage.CreateTable();
+
             
             Dispose();
         }
@@ -82,10 +40,16 @@ namespace Sqlite.ORM.Tests
             var obj = DataFixture.Create<DummyTestClass>();
 
             // Act
-            SqliteStorage.StoreModel(obj);
+            SqliteStorage.Add(obj);
 
             // Assert
             Assert.Equal(1, SqliteStorage.GetCountOfModels());
+        }
+
+        [Fact]
+        public void Test__Store__Aync()
+        {
+            Task.Run(() => Test__Store());
         }
 
         [Fact]
@@ -95,11 +59,17 @@ namespace Sqlite.ORM.Tests
             var obj = DataFixture.Create<DummyTestClass>();
 
             // Act
-            SqliteStorage.StoreModel(obj);
-            var newObj = SqliteStorage.RetrieveModel(obj);
+            SqliteStorage.Add(obj);
+            var newObj = SqliteStorage.Find(obj);
 
             // Assert
             Assert.Equal(obj, newObj);
+        }
+
+        [Fact]
+        public void Test__Store__Retrieve__Aync()
+        {
+            Task.Run(() => Test__Store__Retrieve());
         }
 
         [Fact]
@@ -109,11 +79,17 @@ namespace Sqlite.ORM.Tests
             var obj = DataFixture.Create<DummyTestClass>();
             
             // Act
-            SqliteStorage.StoreModel(obj);
-            SqliteStorage.DeleteAllModels();
+            SqliteStorage.Add(obj);
+            SqliteStorage.DeleteAll();
 
             // Assert
             Assert.Equal(0, SqliteStorage.GetCountOfModels());
+        }
+
+        [Fact]
+        public void Test__Delete__Aync()
+        {
+            Task.Run(() => Test__Delete());
         }
 
         [Fact]
@@ -124,10 +100,16 @@ namespace Sqlite.ORM.Tests
             var objects = DataFixture.CreateMany<DummyTestClass>(countOfModels).ToList();
 
             // Act
-            SqliteStorage.StoreModels(objects);
+            SqliteStorage.AddAll(objects);
 
             // Assert
             Assert.Equal(countOfModels, SqliteStorage.GetCountOfModels());
+        }
+
+        [Fact]
+        public void Test__Count__Aync()
+        {
+            Task.Run(() => Test__Count());
         }
         
         [Fact]
@@ -138,13 +120,18 @@ namespace Sqlite.ORM.Tests
             var objects = DataFixture.CreateMany<DummyTestClass>(countOfModels).ToList();
 
             // Act
-            SqliteStorage.StoreModels(objects);
-            SqliteStorage.DeleteModels(objects);
+            SqliteStorage.AddAll(objects);
+            SqliteStorage.Delete(objects);
 
             // Assert
             Assert.Equal(0, SqliteStorage.GetCountOfModels());
         }
-        
+
+        [Fact]
+        public void Test__DeleteModels__Aync()
+        {
+            Task.Run(() => Test__DeleteModels());
+        }
         
         [Fact]
         public void Test__RetrieveAll()
@@ -154,10 +141,39 @@ namespace Sqlite.ORM.Tests
             var objects = DataFixture.CreateMany<DummyTestClass>(countOfModels).ToList();
 
             // Act
-            SqliteStorage.StoreModels(objects);
+            SqliteStorage.AddAll(objects);
 
             // Assert
-            Assert.Equal(objects, SqliteStorage.RetrieveAllModels());
+            Assert.Equal(objects, SqliteStorage.FindAll());
+        }
+
+        [Fact]
+        public void Test__RetrieveAll__Aync()
+        {
+            Task.Run(() => Test__RetrieveAll());
+        }
+        
+        [Fact]
+        public void Test__Update()
+        {
+            // Assign
+            const int countOfModels = 10;
+            var objects = DataFixture.CreateMany<DummyTestClass>(countOfModels).ToList();
+            var source = objects.First();
+            var destination = objects.Last();
+                
+            // Act
+            SqliteStorage.AddAll(objects);
+            SqliteStorage.Update(source, destination);
+
+            // Assert
+            Assert.Equal(2, SqliteStorage.FindAll(destination).Count());
+        }
+
+        [Fact]
+        public void Test__Update__Aync()
+        {
+            Task.Run(() => Test__Update());
         }
 
         /// <inheritdoc />
@@ -166,7 +182,7 @@ namespace Sqlite.ORM.Tests
         /// </summary>
         public void Dispose()
         {
-            SqliteStorage.DeleteAllModels();
+            SqliteStorage.DeleteAll();
         }
     }
 }
