@@ -237,6 +237,26 @@ namespace Sqlite.ORM
         }
 
         /// <summary>
+        /// Applies filter statement on FindAll and returns first or default
+        /// </summary>
+        /// <param name="filter"></param>
+        /// <returns></returns>
+        public T Find(Func<T, bool> filter)
+        {
+            return FindAll().Where(filter).FirstOrDefault();
+        }
+        
+        /// <summary>
+        /// Applies filter statement on FindAll and returns list
+        /// </summary>
+        /// <param name="filter"></param>
+        /// <returns></returns>
+        public IEnumerable<T> FindAll(Func<T, bool> filter)
+        {
+            return FindAll().Where(filter);
+        }
+        
+        /// <summary>
         /// Retrieves a model from database
         /// </summary>
         /// <param name="model"></param>
