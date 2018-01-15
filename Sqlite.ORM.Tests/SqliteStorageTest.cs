@@ -43,7 +43,7 @@ namespace Sqlite.ORM.Tests
             SqliteStorage.Add(obj);
 
             // Assert
-            Assert.Equal(1, SqliteStorage.GetCountOfModels());
+            Assert.Equal(1, SqliteStorage.Count());
         }
 
         [Fact]
@@ -83,7 +83,7 @@ namespace Sqlite.ORM.Tests
             SqliteStorage.DeleteAll();
 
             // Assert
-            Assert.Equal(0, SqliteStorage.GetCountOfModels());
+            Assert.Equal(0, SqliteStorage.Count());
         }
 
         [Fact]
@@ -103,7 +103,7 @@ namespace Sqlite.ORM.Tests
             SqliteStorage.AddAll(objects);
 
             // Assert
-            Assert.Equal(countOfModels, SqliteStorage.GetCountOfModels());
+            Assert.Equal(countOfModels, SqliteStorage.Count());
         }
 
         [Fact]
@@ -124,7 +124,7 @@ namespace Sqlite.ORM.Tests
             SqliteStorage.Delete(objects);
 
             // Assert
-            Assert.Equal(0, SqliteStorage.GetCountOfModels());
+            Assert.Equal(0, SqliteStorage.Count());
         }
 
         [Fact]

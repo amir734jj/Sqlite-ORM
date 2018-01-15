@@ -17,7 +17,7 @@ namespace Sqlite.ORM.Interfaces
         void Delete(Dictionary<string, object> keyValueDictionary, int limitCount = 100);
         void DeleteAll();
         void DeleteTable();
-        int GetCountOfModels();
+        int Count();
         void Update(T source, T destination);
         void Update(Dictionary<string, object> source, Dictionary<string, object> destination, int limitCount = 1);
     }

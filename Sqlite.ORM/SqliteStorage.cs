@@ -413,7 +413,7 @@ namespace Sqlite.ORM
         /// Get number of models in database
         /// </summary>
         /// <returns></returns>
-        public int GetCountOfModels()
+        public int Count()
         {
             var commandText = $@"
                     SELECT COUNT (*)
@@ -546,12 +546,15 @@ namespace Sqlite.ORM
         /// <returns></returns>
         private SqliteCommand CreateCommand(string commandText)
         {
-            if (_sqliteConnection.State != ConnectionState.Open)
+            lock (_lock)
             {
-                _sqliteConnection.Open();
+                if (_sqliteConnection.State != ConnectionState.Open)
+                {
+                    _sqliteConnection.Open();
+                }
+                
+                return new SqliteCommand(commandText, _sqliteConnection);
             }
-
-            return new SqliteCommand(commandText, _sqliteConnection);
         }
 
         /// <summary>
