@@ -10,6 +10,24 @@ namespace Sqlite.ORM
     /// </summary>
     public class TypeUtility : ITypeUtility
     {
+        private readonly List<Type> _leafTypes;
+        
+        /// <summary>
+        /// Initialize a constructor
+        /// </summary>
+        public TypeUtility()
+        {
+            _leafTypes = new List<Type>();    
+        }
+
+        /// <summary>
+        /// Adds a leaf type to list
+        /// </summary>
+        public void AddLeafType(Type type)
+        {
+            _leafTypes.Add(type);
+        }
+        
         /// <summary>
         /// Converst type to dictionary of property name/property type
         /// </summary>
@@ -24,8 +42,11 @@ namespace Sqlite.ORM
             foreach (var property in type.GetProperties())
             {
                 var propertyType = property.PropertyType;
-                
-                if (propertyType.IsSystemType()) retVal.Add(property.Name, propertyType);
+
+                if (propertyType.IsSystemType() || _leafTypes.Contains(propertyType))
+                {
+                    retVal.Add(property.Name, propertyType);
+                }
                 else
                 {
                     foreach (var (complexName, complexType) in TypeToDictionary(propertyType))

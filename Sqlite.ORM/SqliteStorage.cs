@@ -20,14 +20,14 @@ namespace Sqlite.ORM
         public const string TableNameSufix = "__TABLE";
         public static readonly string NewLine = Environment.NewLine;
         public const int LimitCount = 100;
-        public const string IdColumnName = "_Id";
+        public const string IdColumnName = "___Id";
 
         private const string DefaultDatabaseName = "db.sqlite";
         private static readonly string DefaultDatabaseFolderPath = Environment.CurrentDirectory;
         public static readonly string DefaultDataBaseStoragePath = Path.Combine(DefaultDatabaseFolderPath, DefaultDatabaseName);
     }
     
-    internal static class DataType
+    public static class DataType
     {
         /// <summary>
         /// Sqlite supported types
@@ -67,43 +67,65 @@ namespace Sqlite.ORM
     /// </summary>
     public class SqliteStorage<T> : ISqliteStorage<T>, IDisposable
     {
-        private readonly string _dataBaseStoragePath;
+        private string _dataBaseStoragePath;
         private SqliteConnection _sqliteConnection;
-        private readonly string _tableName;
-        private readonly Dictionary<string, Type> _modelProperties;
-        private readonly List<string> _modelPropertiesNames;
-        private readonly List<SqliteTransaction> _transactions;
-        private readonly ITypeUtility _typeUtility;
+        private string _tableName;
+        private Dictionary<string, Type> _modelProperties;
+        private List<string> _modelPropertiesNames;
+        private List<SqliteTransaction> _transactions;
+        private ITypeUtility _typeUtility;
+        private Dictionary<Type, (Func<object, string> serializer, Func<string, object> deserializer)> _customTypes;
+        private bool _initialized;
         
         // this is used to make ORM thread safe
         private static readonly object _lock = new object();
         
         #region CONSTRUCTORS
-        
-        /// <inheritdoc />
-        /// <summary>
-        /// Parameterless constructor
-        /// </summary>
-        public SqliteStorage() : this(Configuration.DefaultDataBaseStoragePath) { }
 
         /// <summary>
         /// Constructor
         /// </summary>
         /// <param name="dataBaseStoragePath"></param>
-        public SqliteStorage(string dataBaseStoragePath)
+        /// <param name="customTypes"></param>
+        public SqliteStorage(string dataBaseStoragePath = null, Dictionary<Type, (Func<object, string> serializer, Func<string, object> deserializer)> customTypes = null)
         {
+            // set database storgae path
+            _dataBaseStoragePath = dataBaseStoragePath ?? Configuration.DefaultDataBaseStoragePath;
+            
+            // initialize custom type dictionary
+            _customTypes = customTypes ?? new Dictionary<Type, (Func<object, string> serializer, Func<string, object> deserializer)>();
+            
             // set table name
             _tableName = Configuration.TableNamePrefix + typeof(T).Name.ToUpper() + Configuration.TableNameSufix;
-
-            // set database storgae path
-            _dataBaseStoragePath = dataBaseStoragePath;
             
             // create a type utility instance
             _typeUtility = new TypeUtility();
-
+            
             // initialize transactions list
             _transactions = new List<SqliteTransaction>();
             
+            // initialize table
+            Initialize();
+            
+            Console.WriteLine($"Connection string: {_sqliteConnection.ConnectionString}");
+        }
+
+        /// <summary>
+        /// Initialize
+        /// </summary>
+        private void Initialize()
+        {
+            if (_initialized) return;
+            
+            // add custom types to type utility
+            foreach (var (type, _) in _customTypes)
+            {
+                _typeUtility.AddLeafType(type);
+                
+                // default to text always
+                DataType.DataTypeToSqliteTypeDictionary.TryAdd(type, DataType.SqliteTypes.Text);
+            };
+                        
             // set model properties
             _modelProperties = _typeUtility.TypeToDictionary(typeof(T));
             
@@ -115,8 +137,9 @@ namespace Sqlite.ORM
             
             // create table
             CreateTable();
-            
-            Console.WriteLine($"Connection string: {_sqliteConnection.ConnectionString}");
+
+            // set flag to initialized
+            _initialized = true;
         }
         
         #endregion
@@ -141,7 +164,6 @@ namespace Sqlite.ORM
             }
         }
 
-        
         /// <summary>
         /// Creates table given model type
         /// </summary>
@@ -168,9 +190,11 @@ namespace Sqlite.ORM
         /// <param name="commandText"></param>
         public object DirectCommand(string commandText)
         {
-            var command = _sqliteConnection.CreateCommand();
-
-            return ExecuteScalar(command);
+            lock (_lock)
+            {
+                var command = _sqliteConnection.CreateCommand();
+                return ExecuteScalar(command);
+            }
         }
         
         /// <summary>
@@ -625,28 +649,17 @@ namespace Sqlite.ORM
             _transactions.Last().Rollback();
         }
         
-        #endregion
-
-        #region STATIC_HELPERS
-
-        /// <summary>
-        /// Returns default value given type
-        /// </summary>
-        /// <param name="type"></param>
-        /// <returns></returns>
-        private static object GetDefaultOfType(Type type)
-        {
-            return type.IsValueType ? Activator.CreateInstance(type) : null;
-        }
-
         /// <summary>
         /// Converts property value just before store to database
         /// </summary>
         /// <param name="value"></param>
         /// <param name="type"></param>
         /// <returns></returns>
-        private static object DataConverterUponQuery(object value, Type type)
+        private object DataConverterUponQuery(object value, Type type)
         {
+            // if type is in custom types then use custom serilizer
+            if (_customTypes.ContainsKey(type)) return _customTypes[type].serializer(value);
+            
             if (value == null && type == typeof(string))
             {
                 return string.Empty;
@@ -667,8 +680,11 @@ namespace Sqlite.ORM
         /// <param name="data"></param>
         /// <param name="type"></param>
         /// <returns></returns>
-        private static object DataConverterUponRetrieve(object data, Type type)
+        private object DataConverterUponRetrieve(object data, Type type)
         {
+            // if type is in custom types then use custom deserilizer
+            if (_customTypes.ContainsKey(type)) return _customTypes[type].deserializer(data as string);
+            
             // this was needed otherwise code thorws an exception
             switch (data)
             {
@@ -687,6 +703,20 @@ namespace Sqlite.ORM
             }
 
             return data;
+        }
+        
+        #endregion
+
+        #region STATIC_HELPERS
+
+        /// <summary>
+        /// Returns default value given type
+        /// </summary>
+        /// <param name="type"></param>
+        /// <returns></returns>
+        private static object GetDefaultOfType(Type type)
+        {
+            return type.IsValueType ? Activator.CreateInstance(type) : null;
         }
 
         #endregion

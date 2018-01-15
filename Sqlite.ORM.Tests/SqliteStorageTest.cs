@@ -21,7 +21,13 @@ namespace Sqlite.ORM.Tests
         public SqliteStorageTest()
         {
             DataFixture = new Fixture();
-            SqliteStorage = new SqliteStorage<DummyTestClass>();
+            DataFixture.Register(ObjectId.GenerateNewId);
+            
+            SqliteStorage = new SqliteStorage<DummyTestClass>(customTypes: new Dictionary<Type, (Func<object, string> serializer, Func<string, object> deserializer)>()
+            {
+                // add support for custom type
+                {typeof(ObjectId), (obj => obj.ToString(), str => ObjectId.Parse(str))}
+            });
             
             // delete table
             SqliteStorage.DeleteTable();
@@ -29,7 +35,7 @@ namespace Sqlite.ORM.Tests
             // re-create the table
             SqliteStorage.CreateTable();
 
-            
+            // clean-up, delete all models
             Dispose();
         }
         

@@ -14,7 +14,7 @@ namespace Sqlite.ORM.Tests
         {
             return new DateTime(dt.Year, dt.Month, dt.Day, dt.Hour, dt.Minute, dt.Second, 0);
         }
-    }
+    }    
     
     public class DummyNestedTestClass {
         public string MotherName { get; set; }
@@ -33,6 +33,7 @@ namespace Sqlite.ORM.Tests
         public DateTime DateOfBirth { get; set; }
         public char Initial { get; set; }
         public DummyNestedTestClass Parents { get; set; }
+        public ObjectId IdNumber { get; set; }
 
         public bool Equals(DummyTestClass other)
         {
