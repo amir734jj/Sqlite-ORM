@@ -46,7 +46,7 @@ namespace Sqlite.ORM.Tests
             var obj = DataFixture.Create<DummyTestClass>();
 
             // Act
-            SqliteStorage.Add(obj);
+            //SqliteStorage.Add(obj);
 
             // Assert
             Assert.Equal(1, SqliteStorage.Count());

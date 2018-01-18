@@ -12,7 +12,7 @@ namespace Sqlite.ORM
         /// </summary>
         /// <param name="x"></param>
         /// <returns></returns>
-        public static bool IsSystemType(this Type x) => x.Namespace == "System";
+        public static bool IsSystemType(this Type x) => x.Namespace.StartsWith("System");
 
         /// <summary>
         /// Creates raw object using activator

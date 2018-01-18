@@ -38,7 +38,8 @@ namespace Sqlite.ORM
             Numeric,
             Integer,
             Real,
-            Blob
+            Blob,
+            Table
         }
 
         /// <summary>
@@ -53,10 +54,30 @@ namespace Sqlite.ORM
             { typeof(string), SqliteTypes.Text },
             { typeof(DateTime), SqliteTypes.Text },
             { typeof(char), SqliteTypes.Text },
-            { typeof(bool), SqliteTypes.Text }
+            { typeof(bool), SqliteTypes.Text },
+            { typeof(List<>), SqliteTypes.Table }
         };
     }
 
+    /// <summary>
+    /// SqliteStorgae factory class
+    /// </summary>
+    public class SqliteStorageFactory
+    {
+        /// <summary>
+        /// Instantiates a generic SqliteStorge class
+        /// </summary>
+        /// <param name="type"></param>
+        /// <returns></returns>
+        public static SqliteStorage<object> SqliteStorageGeneric(Type type)
+        {
+            var listType = typeof(SqliteStorage<>);
+            var constructedListType = listType.MakeGenericType(type);
+            var instance = Activator.CreateInstance(constructedListType, new object[] { });
+
+            return instance as SqliteStorage<object>;
+        }
+    }
 
     /// <inheritdoc>
     ///     <cref></cref>
@@ -75,6 +96,7 @@ namespace Sqlite.ORM
         private List<SqliteTransaction> _transactions;
         private ITypeUtility _typeUtility;
         private Dictionary<Type, (Func<object, string> serializer, Func<string, object> deserializer)> _customTypes;
+        private Dictionary<string, (Type type, SqliteStorage<object> sqliteStorage)> _referencedTables;
         private bool _initialized;
         
         // this is used to make ORM thread safe
@@ -104,6 +126,9 @@ namespace Sqlite.ORM
             // initialize transactions list
             _transactions = new List<SqliteTransaction>();
             
+            // referenced tables
+            _referencedTables = new Dictionary<string, (Type type, SqliteStorage<object> sqliteStorage)>();
+            
             // initialize table
             Initialize();
             
@@ -117,7 +142,7 @@ namespace Sqlite.ORM
         {
             if (_initialized) return;
             
-            // add custom types to type utility
+            // add custom types to type utility so it is aware
             foreach (var (type, _) in _customTypes)
             {
                 // this is needed so recursive algorithm would not try to digest the custom class to find system type
@@ -166,12 +191,49 @@ namespace Sqlite.ORM
         }
 
         /// <summary>
+        /// Gets Sqlite type, best matching the propertyType
+        /// </summary>
+        /// <param name="type"></param>
+        /// <returns></returns>
+        /// <exception cref="Exception"></exception>
+        private DataType.SqliteTypes GetSqliteType(Type type)
+        {
+            if (DataType.DataTypeToSqliteTypeDictionary.ContainsKey(type))
+            {
+                return DataType.DataTypeToSqliteTypeDictionary[type];
+            }
+
+            if (DataType.DataTypeToSqliteTypeDictionary.All(x => type.GetGenericTypeDefinition() != type))
+            {
+                throw new Exception("Type is not supported, sorry!");
+            }
+                
+            return DataType.DataTypeToSqliteTypeDictionary.FirstOrDefault(x => type.GetGenericTypeDefinition() == type).Value;
+        }
+
+        /// <summary>
         /// Creates table given model type
         /// </summary>
         public void CreateTable()
         {
             var schema = string.Join(',', _modelProperties.Select(x =>
-                $"`{x.Key}` {DataType.DataTypeToSqliteTypeDictionary[x.Value]}"));
+            {
+                var sqliteType = GetSqliteType(x.Value);
+
+                if (sqliteType.Equals(DataType.SqliteTypes.Table))
+                {
+                    // create generic instance of self
+                    var nestedTable = SqliteStorageFactory.SqliteStorageGeneric(x.Value);
+                    
+                    // add generic instance to list
+                    _referencedTables.Add(x.Key, (x.Value, nestedTable));
+
+                    // use type Text for reference property
+                    sqliteType = DataType.SqliteTypes.Table;
+                }
+                
+                return $"`{x.Key}` {sqliteType}";
+            }));
 
             var commandText = $@"
                     CREATE TABLE IF NOT EXISTS
@@ -215,6 +277,11 @@ namespace Sqlite.ORM
                     ";
 
             CreateAndExecuteNonQueryCommand(commandText);
+            
+            foreach (var (propertyName, (propertyType, sqliteStorage)) in _referencedTables)
+            {
+                sqliteStorage.AddAll((IEnumerable<object>) _typeUtility.GetPropertyValue(propertyName, obj, propertyType));
+            }
         }
 
 

@@ -10,5 +10,6 @@ namespace Sqlite.ORM.Interfaces
         object GetPropertyValue(string name, object obj, Type type);
         void SetPropertyValue(string compoundProperty, object target, object value);
         object GetDefaultOfType(Type type);
+        Type GetAnyElementType(Type type);
     }
 }

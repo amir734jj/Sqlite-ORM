@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace Sqlite.ORM.Tests
 {
@@ -51,6 +52,7 @@ namespace Sqlite.ORM.Tests
         public char Initial { get; set; }
         public DummyNestedTestClass Parents { get; set; }
         public ObjectId IdNumber { get; set; }
+        public List<DummyNestedTestClass> NestedTestClasses { get; set; }
 
         public bool Equals(DummyTestClass other)
         {
