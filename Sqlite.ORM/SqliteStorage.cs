@@ -16,12 +16,13 @@ namespace Sqlite.ORM
     /// </summary>
     internal static class Configuration
     {
-        public const string TableNamePrefix = "DATA__";
-        public const string TableNameSufix = "__TABLE";
         public static readonly string NewLine = Environment.NewLine;
         public const int LimitCount = 100;
-        public const string IdColumnName = "___Id";
-
+        public const string IdColumnName = "_Id_";
+        public static readonly Func<Type, string> PrimaryKeyColumnName = x => $"Primary{x.Name}{IdColumnName}";
+        public static readonly Func<Type, string> ForeignKeyColumnName = x => $"Foreign{x.Name}{IdColumnName}";
+        public static readonly Func<Type, string> TableName = x => $"DATA_{x.Name}_TABLE";
+        
         private const string DefaultDatabaseName = "db.sqlite";
         private static readonly string DefaultDatabaseFolderPath = Environment.CurrentDirectory;
         public static readonly string DefaultDataBaseStoragePath = Path.Combine(DefaultDatabaseFolderPath, DefaultDatabaseName);
@@ -71,11 +72,17 @@ namespace Sqlite.ORM
         /// <returns></returns>
         public static SqliteStorage<object> SqliteStorageGeneric(Type type)
         {
+            var nestedType = new TypeUtility().GetAnyElementType(type);
             var listType = typeof(SqliteStorage<>);
-            var constructedListType = listType.MakeGenericType(type);
-            var instance = Activator.CreateInstance(constructedListType, new object[] { });
+            var constructedListType = listType.MakeGenericType(nestedType);
+            
+            // the true there will tell constructor that this is a reference table
+            dynamic instance = Activator.CreateInstance(constructedListType, null, null, true);
 
-            return instance as SqliteStorage<object>;
+            var ss = instance as ISqliteStorageSimpleType;
+    
+            
+            return instance;
         }
     }
 
@@ -86,7 +93,7 @@ namespace Sqlite.ORM
     /// Data access layer to store models into Sqlite database,
     /// creates a table
     /// </summary>
-    public class SqliteStorage<T> : ISqliteStorage<T>, IDisposable
+    public class SqliteStorage<T> : ISqliteStorage<T>, ISqliteStorageSimpleType, IDisposable where T : class
     {
         private string _dataBaseStoragePath;
         private SqliteConnection _sqliteConnection;
@@ -98,6 +105,7 @@ namespace Sqlite.ORM
         private Dictionary<Type, (Func<object, string> serializer, Func<string, object> deserializer)> _customTypes;
         private Dictionary<string, (Type type, SqliteStorage<object> sqliteStorage)> _referencedTables;
         private bool _initialized;
+        private bool _isReferenceType;
         
         // this is used to make ORM thread safe
         private static readonly object _lock = new object();
@@ -109,8 +117,12 @@ namespace Sqlite.ORM
         /// </summary>
         /// <param name="dataBaseStoragePath"></param>
         /// <param name="customTypes"></param>
-        public SqliteStorage(string dataBaseStoragePath = null, Dictionary<Type, (Func<object, string> serializer, Func<string, object> deserializer)> customTypes = null)
+        /// <param name="isReferenceType"></param>
+        public SqliteStorage(string dataBaseStoragePath = null, Dictionary<Type, (Func<object, string> serializer, Func<string, object> deserializer)> customTypes = null, bool isReferenceType = false)
         {
+            // sets if table is referenced type
+            _isReferenceType = isReferenceType;
+            
             // set database storgae path
             _dataBaseStoragePath = dataBaseStoragePath ?? Configuration.DefaultDataBaseStoragePath;
             
@@ -118,7 +130,7 @@ namespace Sqlite.ORM
             _customTypes = customTypes ?? new Dictionary<Type, (Func<object, string> serializer, Func<string, object> deserializer)>();
             
             // set table name
-            _tableName = Configuration.TableNamePrefix + typeof(T).Name.ToUpper() + Configuration.TableNameSufix;
+            _tableName = Configuration.TableName(typeof(T));
             
             // create a type utility instance
             _typeUtility = new TypeUtility();
@@ -151,12 +163,9 @@ namespace Sqlite.ORM
                 // default to text always
                 DataType.DataTypeToSqliteTypeDictionary.TryAdd(type, DataType.SqliteTypes.Text);
             };
-                        
-            // set model properties
-            _modelProperties = _typeUtility.TypeToDictionary(typeof(T));
-            
-            // set model properties names
-            _modelPropertiesNames = _modelProperties.Keys.ToList();
+    
+            // create properties dictionary and handle reference properties
+            HandlePropertiesAndReferenceTypes();
 
             // connect to database
             Connect();
@@ -166,6 +175,45 @@ namespace Sqlite.ORM
 
             // set flag to initialized
             _initialized = true;
+        }
+
+        /// <summary>
+        /// Handle properties array and filters out reference properties
+        /// </summary>
+        /// <exception cref="Exception"></exception>
+        private void HandlePropertiesAndReferenceTypes()
+        {
+            // set model properties
+            _modelProperties = _typeUtility.TypeToDictionary(typeof(T));
+            var modelPropertiesClone = new Dictionary<string, Type>(_modelProperties);
+            
+            foreach (var (propertyName, propertyType) in _modelProperties)
+            {
+                if (DataType.DataTypeToSqliteTypeDictionary.ContainsKey(propertyType)) continue;;
+                
+                // Gets Sqlite type, best matching the propertyType
+                if (DataType.DataTypeToSqliteTypeDictionary.Any(x => propertyType.GetGenericTypeDefinition() == x.Key))
+                {
+                    // remove from property from system or atomic types
+                    modelPropertiesClone.Remove(propertyName);
+                    
+                    // create generic instance of self
+                    var nestedTable = SqliteStorageFactory.SqliteStorageGeneric(propertyType);
+                    
+                    // add generic instance to list
+                    _referencedTables.Add(propertyName, (propertyType, nestedTable));
+                }
+                else
+                {
+                    throw new Exception("Type is not supported, sorry!");
+                }
+            }
+
+            // set the actual to clone
+            _modelProperties = modelPropertiesClone;
+            
+            // set model properties names
+            _modelPropertiesNames = _modelProperties.Keys.ToList();
         }
         
         #endregion
@@ -191,49 +239,25 @@ namespace Sqlite.ORM
         }
 
         /// <summary>
-        /// Gets Sqlite type, best matching the propertyType
-        /// </summary>
-        /// <param name="type"></param>
-        /// <returns></returns>
-        /// <exception cref="Exception"></exception>
-        private DataType.SqliteTypes GetSqliteType(Type type)
-        {
-            if (DataType.DataTypeToSqliteTypeDictionary.ContainsKey(type))
-            {
-                return DataType.DataTypeToSqliteTypeDictionary[type];
-            }
-
-            if (DataType.DataTypeToSqliteTypeDictionary.All(x => type.GetGenericTypeDefinition() != type))
-            {
-                throw new Exception("Type is not supported, sorry!");
-            }
-                
-            return DataType.DataTypeToSqliteTypeDictionary.FirstOrDefault(x => type.GetGenericTypeDefinition() == type).Value;
-        }
-
-        /// <summary>
         /// Creates table given model type
         /// </summary>
         public void CreateTable()
         {
-            var schema = string.Join(',', _modelProperties.Select(x =>
+            var schemaList = _modelProperties.ToList();
+
+            // if there is a reference table, then add primary key to it
+            if (_referencedTables.Any())
             {
-                var sqliteType = GetSqliteType(x.Value);
+                schemaList.Add(new KeyValuePair<string, Type>(Configuration.PrimaryKeyColumnName(typeof(T)), typeof(string)));
+            }
 
-                if (sqliteType.Equals(DataType.SqliteTypes.Table))
-                {
-                    // create generic instance of self
-                    var nestedTable = SqliteStorageFactory.SqliteStorageGeneric(x.Value);
-                    
-                    // add generic instance to list
-                    _referencedTables.Add(x.Key, (x.Value, nestedTable));
-
-                    // use type Text for reference property
-                    sqliteType = DataType.SqliteTypes.Table;
-                }
-                
-                return $"`{x.Key}` {sqliteType}";
-            }));
+            // if this instance is a reference class, then add foriegn key to it as well
+            if (_isReferenceType)
+            {
+                schemaList.Add(new KeyValuePair<string, Type>(Configuration.ForeignKeyColumnName(typeof(T)), typeof(string)));
+            }
+            
+            var schema = string.Join(',', schemaList.Select(x => $"`{x.Key}` {DataType.DataTypeToSqliteTypeDictionary[x.Value]}"));
 
             var commandText = $@"
                     CREATE TABLE IF NOT EXISTS
@@ -242,7 +266,12 @@ namespace Sqlite.ORM
 
             CreateAndExecuteNonQueryCommand(commandText);
         }
-        
+
+        public void Add(object obj)
+        {
+            Add(obj as T);
+        }
+
         #endregion
 
         #region FUNCTIONALITIES
@@ -266,21 +295,36 @@ namespace Sqlite.ORM
         /// <param name="obj"></param>
         public void Add (T obj)
         {
-            var propertiesSchema = string.Join(',', _modelPropertiesNames.Select(x => $"`{x}`"));
+            var hashcode = string.Empty;
+            var schema = _modelPropertiesNames;
+
+            // if there is a reference table, then add primary key to it
+            if (_referencedTables.Any())
+            {
+                schema.Add(Configuration.PrimaryKeyColumnName(typeof(T)));
+                hashcode = _typeUtility.HashObjectRandomly(obj);;
+            }
+            
+            var propertiesSchema = string.Join(',', schema.Select(x => $"`{x}`"));
             var propertiesValues = ObjectToStatementClause(obj);
             
-            var commandText = $@"
+            var commandText = $@"""
                     INSERT INTO {_tableName}
                         ({propertiesSchema})
                     VALUES
-                        ({propertiesValues});
-                    ";
+                        ({propertiesValues} {(_referencedTables.Any() ? $", '{hashcode}'" : string.Empty)});
+                    """;
 
+            // add parent object
             CreateAndExecuteNonQueryCommand(commandText);
             
+            // add nested object, i.e. foreach nested referenced property do a add all
             foreach (var (propertyName, (propertyType, sqliteStorage)) in _referencedTables)
             {
-                sqliteStorage.AddAll((IEnumerable<object>) _typeUtility.GetPropertyValue(propertyName, obj, propertyType));
+                if (_typeUtility.GetPropertyValue(propertyName, obj, typeof(T)) is IEnumerable<object> value)
+                {
+                    sqliteStorage.AddAll(value, hashcode: hashcode);    
+                }
             }
         }
 
@@ -289,10 +333,19 @@ namespace Sqlite.ORM
         /// Stores list of models into database
         /// </summary>
         /// <param name="objects"></param>
-        public void AddAll(IEnumerable<T> objects)
+        /// <param name="hashcode"></param>
+        private void AddAll(IEnumerable<T> objects, string hashcode = null)
         {
-            var propertiesSchema = string.Join(',', _modelPropertiesNames.Select(x => $"`{x}`"));
-            var propertiesValues = string.Join(',', objects.Select(obj => $"( {ObjectToStatementClause(obj)}) "));
+            var schema = _modelPropertiesNames;
+
+            // if there is a reference table, then add primary key to it
+            if (_referencedTables.Any())
+            {
+                schema.Add(Configuration.ForeignKeyColumnName(typeof(T)));
+            }
+            
+            var propertiesSchema = string.Join(',', schema.Select(x => $"`{x}`"));
+            var propertiesValues = string.Join(',', objects.Select(obj => $"( {ObjectToStatementClause(obj)} {(hashcode != null ? $", '{hashcode}'" : string.Empty)}) "));
 
             var commandText = $@"
                     INSERT INTO {_tableName}
@@ -602,6 +655,7 @@ namespace Sqlite.ORM
             return string.Join(',', _modelProperties.Select(x =>
                 $"'{DataConverterUponQuery(_typeUtility.GetPropertyValue(x.Key, obj, typeof(T)), x.Value)}'"));
         }
+        
 
         /// <summary>
         /// Dictionary to "AND" clause
@@ -711,7 +765,7 @@ namespace Sqlite.ORM
 
                 try
                 {
-                    command.CommandText = commandText;
+                    command.CommandText = commandText.Trim('"');;
                     command.ExecuteNonQuery();
                 }
                 catch (Exception e)

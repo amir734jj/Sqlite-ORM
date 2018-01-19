@@ -11,5 +11,6 @@ namespace Sqlite.ORM.Interfaces
         void SetPropertyValue(string compoundProperty, object target, object value);
         object GetDefaultOfType(Type type);
         Type GetAnyElementType(Type type);
+        string HashObjectRandomly(object obj);
     }
 }

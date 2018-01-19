@@ -10,7 +10,7 @@ namespace Sqlite.ORM.Interfaces
 
         // add method overloads
         void Add(T obj);
-        void AddAll(IEnumerable<T> objects);
+        //void AddAll(IEnumerable<T> objects, string hashcode = null);
 
         // find method overloads
         T Find(Func<T, bool> filter);

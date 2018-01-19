@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using Sqlite.ORM.Interfaces;
 
 namespace Sqlite.ORM
@@ -155,6 +157,18 @@ namespace Sqlite.ORM
                             t.GetGenericTypeDefinition() == typeof(IEnumerable<>))
                 .Select(t => t.GenericTypeArguments[0]).FirstOrDefault();
             return enumType ?? type;
+        }
+
+        /// <summary>
+        /// Hashesh the hash code of object concatinated with a random padding
+        /// </summary>
+        /// <param name="obj"></param>
+        /// <returns></returns>
+        public string HashObjectRandomly(object obj)
+        {
+            var hashCode = obj.GetHashCode().ToString();
+            var hash = (new SHA1Managed()).ComputeHash(Encoding.UTF8.GetBytes($"{hashCode}{DateTime.Now}"));
+            return string.Join("", hash.Select(b => b.ToString("x2")).ToArray());
         }
     }
 }

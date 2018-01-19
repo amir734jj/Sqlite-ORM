@@ -46,7 +46,7 @@ namespace Sqlite.ORM.Tests
             var obj = DataFixture.Create<DummyTestClass>();
 
             // Act
-            //SqliteStorage.Add(obj);
+            SqliteStorage.Add(obj);
 
             // Assert
             Assert.Equal(1, SqliteStorage.Count());
@@ -106,7 +106,7 @@ namespace Sqlite.ORM.Tests
             var objects = DataFixture.CreateMany<DummyTestClass>(countOfModels).ToList();
 
             // Act
-            SqliteStorage.AddAll(objects);
+            //SqliteStorage.AddAll(objects);
 
             // Assert
             Assert.Equal(countOfModels, SqliteStorage.Count());
@@ -126,7 +126,7 @@ namespace Sqlite.ORM.Tests
             var objects = DataFixture.CreateMany<DummyTestClass>(countOfModels).ToList();
 
             // Act
-            SqliteStorage.AddAll(objects);
+            //SqliteStorage.AddAll(objects);
             SqliteStorage.Delete(objects);
 
             // Assert
@@ -147,7 +147,7 @@ namespace Sqlite.ORM.Tests
             var objects = DataFixture.CreateMany<DummyTestClass>(countOfModels).ToList();
 
             // Act
-            SqliteStorage.AddAll(objects);
+            //SqliteStorage.AddAll(objects);
 
             // Assert
             Assert.Equal(objects, SqliteStorage.FindAll());
@@ -169,7 +169,7 @@ namespace Sqlite.ORM.Tests
             var destination = objects.Last();
                 
             // Act
-            SqliteStorage.AddAll(objects);
+            //SqliteStorage.AddAll(objects);
             SqliteStorage.Update(source, destination);
 
             // Assert
