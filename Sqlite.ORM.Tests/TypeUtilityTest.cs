@@ -36,7 +36,7 @@ namespace Sqlite.ORM.Tests
                 {"Parents.MotherName", typeof(string)},
                 {"Parents.FatherName", typeof(string)},
                 {"Parents.Status", typeof(bool)},
-                {"IdNumber", typeof(ObjectId)},
+                {"ObjectIdNumber", typeof(ObjectId)},
             };
             
             // Assing
@@ -95,7 +95,7 @@ namespace Sqlite.ORM.Tests
                 {"Parents.MotherName", fixtureInstance.Parents.MotherName},
                 {"Parents.FatherName", fixtureInstance.Parents.FatherName},
                 {"Parents.Status", fixtureInstance.Parents.Status},
-                {"IdNumber", fixtureInstance.IdNumber},
+                {"ObjectIdNumber", fixtureInstance.ObjectIdNumber},
             };
 
             // Act
@@ -128,7 +128,7 @@ namespace Sqlite.ORM.Tests
                 {"Parents.MotherName", fixtureInstance.Parents.MotherName},
                 {"Parents.FatherName", fixtureInstance.Parents.FatherName},
                 {"Parents.Status", fixtureInstance.Parents.Status},
-                {"IdNumber", fixtureInstance.IdNumber},
+                {"ObjectIdNumber", fixtureInstance.ObjectIdNumber},
             };
 
             // Act

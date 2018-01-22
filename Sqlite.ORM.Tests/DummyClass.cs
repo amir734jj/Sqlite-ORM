@@ -51,7 +51,7 @@ namespace Sqlite.ORM.Tests
         public DateTime DateOfBirth { get; set; }
         public char Initial { get; set; }
         public DummyNestedTestClass Parents { get; set; }
-        public ObjectId IdNumber { get; set; }
+        public ObjectId ObjectIdNumber { get; set; }
         public List<DummyNestedTestClass> NestedTestClasses { get; set; }
 
         public bool Equals(DummyTestClass other)
@@ -66,7 +66,7 @@ namespace Sqlite.ORM.Tests
                    && DateOfBirth.TrimMilliseconds().Equals(other.DateOfBirth.TrimMilliseconds())
                    && Initial == other.Initial
                    && Equals(Parents, other.Parents)
-                   && IdNumber.Equals(other.IdNumber);
+                   && ObjectIdNumber.Equals(other.ObjectIdNumber);
         }
 
         public override bool Equals(object obj)

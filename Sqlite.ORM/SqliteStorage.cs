@@ -7,59 +7,11 @@ using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
+using Sqlite.ORM.Constants;
 using Sqlite.ORM.Interfaces;
 
 namespace Sqlite.ORM
 {
-    /// <summary>
-    /// Configurations for ORM
-    /// </summary>
-    internal static class Configuration
-    {
-        public static readonly string NewLine = Environment.NewLine;
-        public const int LimitCount = 100;
-        public const string IdColumnName = "_Id_";
-        public static readonly Func<Type, string> PrimaryKeyColumnName = x => $"Primary{x.Name}{IdColumnName}";
-        public static readonly Func<Type, string> ForeignKeyColumnName = x => $"Foreign{x.Name}{IdColumnName}";
-        public static readonly Func<Type, string> TableName = x => $"DATA_{x.Name}_TABLE";
-        
-        private const string DefaultDatabaseName = "db.sqlite";
-        private static readonly string DefaultDatabaseFolderPath = Environment.CurrentDirectory;
-        public static readonly string DefaultDataBaseStoragePath = Path.Combine(DefaultDatabaseFolderPath, DefaultDatabaseName);
-    }
-    
-    public static class DataType
-    {
-        /// <summary>
-        /// Sqlite supported types
-        /// </summary>
-        public enum SqliteTypes
-        {
-            Text,
-            Numeric,
-            Integer,
-            Real,
-            Blob,
-            Table
-        }
-
-        /// <summary>
-        /// Map between C# data types and Sqlite data types, used for creating a database table
-        /// </summary>
-        public static readonly Dictionary<Type, SqliteTypes> DataTypeToSqliteTypeDictionary = new Dictionary<Type, SqliteTypes>()
-        {
-            { typeof(int), SqliteTypes.Integer },
-            { typeof(long), SqliteTypes.Numeric },
-            { typeof(float), SqliteTypes.Real },
-            { typeof(double), SqliteTypes.Real },
-            { typeof(string), SqliteTypes.Text },
-            { typeof(DateTime), SqliteTypes.Text },
-            { typeof(char), SqliteTypes.Text },
-            { typeof(bool), SqliteTypes.Text },
-            { typeof(List<>), SqliteTypes.Table }
-        };
-    }
-
     /// <summary>
     /// SqliteStorgae factory class
     /// </summary>
@@ -70,7 +22,7 @@ namespace Sqlite.ORM
         /// </summary>
         /// <param name="type"></param>
         /// <returns></returns>
-        public static SqliteStorage<object> SqliteStorageGeneric(Type type)
+        public static ISqliteStorageSimpleType SqliteStorageGeneric(Type type)
         {
             var nestedType = new TypeUtility().GetAnyElementType(type);
             var listType = typeof(SqliteStorage<>);
@@ -79,10 +31,7 @@ namespace Sqlite.ORM
             // the true there will tell constructor that this is a reference table
             dynamic instance = Activator.CreateInstance(constructedListType, null, null, true);
 
-            var ss = instance as ISqliteStorageSimpleType;
-    
-            
-            return instance;
+            return instance as ISqliteStorageSimpleType;
         }
     }
 
@@ -103,9 +52,10 @@ namespace Sqlite.ORM
         private List<SqliteTransaction> _transactions;
         private ITypeUtility _typeUtility;
         private Dictionary<Type, (Func<object, string> serializer, Func<string, object> deserializer)> _customTypes;
-        private Dictionary<string, (Type type, SqliteStorage<object> sqliteStorage)> _referencedTables;
+        private Dictionary<string, (Type type, ISqliteStorageSimpleType sqliteStorage)> _referencedTables;
         private bool _initialized;
         private bool _isReferenceType;
+        private Dictionary<string, Func<T, string>> _simplifiedProperties;
         
         // this is used to make ORM thread safe
         private static readonly object _lock = new object();
@@ -124,13 +74,13 @@ namespace Sqlite.ORM
             _isReferenceType = isReferenceType;
             
             // set database storgae path
-            _dataBaseStoragePath = dataBaseStoragePath ?? Configuration.DefaultDataBaseStoragePath;
+            _dataBaseStoragePath = dataBaseStoragePath ?? SqliteStorageConfiguration.DefaultDataBaseStoragePath;
             
             // initialize custom type dictionary
             _customTypes = customTypes ?? new Dictionary<Type, (Func<object, string> serializer, Func<string, object> deserializer)>();
             
             // set table name
-            _tableName = Configuration.TableName(typeof(T));
+            _tableName = SqliteStorageConfiguration.TableName(typeof(T));
             
             // create a type utility instance
             _typeUtility = new TypeUtility();
@@ -139,7 +89,7 @@ namespace Sqlite.ORM
             _transactions = new List<SqliteTransaction>();
             
             // referenced tables
-            _referencedTables = new Dictionary<string, (Type type, SqliteStorage<object> sqliteStorage)>();
+            _referencedTables = new Dictionary<string, (Type type, ISqliteStorageSimpleType sqliteStorage)>();
             
             // initialize table
             Initialize();
@@ -161,7 +111,7 @@ namespace Sqlite.ORM
                 _typeUtility.AddLeafType(type);
                 
                 // default to text always
-                DataType.DataTypeToSqliteTypeDictionary.TryAdd(type, DataType.SqliteTypes.Text);
+                DataTypes.DataTypeToSqliteTypeDictionary.TryAdd(type, DataTypes.SqliteTypes.Text);
             };
     
             // create properties dictionary and handle reference properties
@@ -186,13 +136,17 @@ namespace Sqlite.ORM
             // set model properties
             _modelProperties = _typeUtility.TypeToDictionary(typeof(T));
             var modelPropertiesClone = new Dictionary<string, Type>(_modelProperties);
+            _simplifiedProperties = new Dictionary<string, Func<T, string>>();
             
             foreach (var (propertyName, propertyType) in _modelProperties)
             {
-                if (DataType.DataTypeToSqliteTypeDictionary.ContainsKey(propertyType)) continue;;
+                if (DataTypes.DataTypeToSqliteTypeDictionary.ContainsKey(propertyType))
+                {
+                    _simplifiedProperties.Add(propertyName, (instance) => DataConverterUponQuery(_typeUtility.GetPropertyValue(propertyName, instance, typeof(T)), propertyType).ToString());
+                }
                 
                 // Gets Sqlite type, best matching the propertyType
-                if (DataType.DataTypeToSqliteTypeDictionary.Any(x => propertyType.GetGenericTypeDefinition() == x.Key))
+                if (DataTypes.DataTypeToSqliteTypeDictionary.Any(x => propertyType.GetGenericTypeDefinition() == x.Key))
                 {
                     // remove from property from system or atomic types
                     modelPropertiesClone.Remove(propertyName);
@@ -207,6 +161,11 @@ namespace Sqlite.ORM
                 {
                     throw new Exception("Type is not supported, sorry!");
                 }
+            }
+
+            if (_referencedTables.Any())
+            {
+                _simplifiedProperties.Add(SqliteStorageConfiguration.PrimaryKeyColumnName(typeof(T)), instance => _typeUtility.HashObjectRandomly(instance));
             }
 
             // set the actual to clone
@@ -228,7 +187,7 @@ namespace Sqlite.ORM
             var connectionString = new SqliteConnectionStringBuilder {
                 DataSource = _dataBaseStoragePath,
                 Mode = SqliteOpenMode.ReadWriteCreate,
-                Cache = SqliteCacheMode.Private            
+                Cache = SqliteCacheMode.Private,       
             };
             
             lock (_lock)
@@ -248,30 +207,42 @@ namespace Sqlite.ORM
             // if there is a reference table, then add primary key to it
             if (_referencedTables.Any())
             {
-                schemaList.Add(new KeyValuePair<string, Type>(Configuration.PrimaryKeyColumnName(typeof(T)), typeof(string)));
+                schemaList.Add(new KeyValuePair<string, Type>(SqliteStorageConfiguration.PrimaryKeyColumnName(typeof(T)), typeof(string)));
             }
 
             // if this instance is a reference class, then add foriegn key to it as well
             if (_isReferenceType)
             {
-                schemaList.Add(new KeyValuePair<string, Type>(Configuration.ForeignKeyColumnName(typeof(T)), typeof(string)));
+                schemaList.Add(new KeyValuePair<string, Type>(SqliteStorageConfiguration.ForeignKeyColumnName(typeof(T)), typeof(string)));
             }
             
-            var schema = string.Join(',', schemaList.Select(x => $"`{x.Key}` {DataType.DataTypeToSqliteTypeDictionary[x.Value]}"));
+            var schema = string.Join(',', schemaList.Select(x => $"`{x.Key}` {DataTypes.DataTypeToSqliteTypeDictionary[x.Value]}"));
 
             var commandText = $@"
                     CREATE TABLE IF NOT EXISTS
-                        '{_tableName}' ('{Configuration.IdColumnName}' INTEGER PRIMARY KEY AUTOINCREMENT, {schema} );
+                        '{_tableName}' ('{SqliteStorageConfiguration.IdColumnName}' INTEGER PRIMARY KEY AUTOINCREMENT, {schema} );
                     ";
 
             CreateAndExecuteNonQueryCommand(commandText);
         }
 
-        public void Add(object obj)
-        {
-            Add(obj as T);
-        }
+        #endregion
 
+        #region ForwardingInstanceMethods
+
+        public void Add(object obj) => Add(obj as T);
+        public void AddAll(IEnumerable<object> objects, string foreignKey = null) => AddAll(objects as IEnumerable<T>, foreignKey);
+        public object Find(Func<object, bool> filter) => Find(filter as Func<T, bool>) as IEnumerable<T>;
+        public object Find(object model) => Find(model as T);
+        object ISqliteStorage<object>.Find(Dictionary<string, object> keyValueDictionary) => Find(keyValueDictionary);
+        public IEnumerable<object> FindAll(Func<object, bool> filter) => Find(filter as Func<T, bool>) as IEnumerable<object>;
+        IEnumerable<object> ISqliteStorage<object>.FindAll(Dictionary<string, object> keyValueDictionary, int limitCount) => FindAll(keyValueDictionary, limitCount);
+        IEnumerable<object> ISqliteStorage<object>.FindAll(int limitCount) => FindAll(limitCount);
+        public IEnumerable<object> FindAll(object model) => FindAll(model as T);
+        //public void Delete(object model) => Delete(model as T);
+        //public void Delete(Func<object, bool> filter) => Delete(filter as Func<T, bool>);
+        //public void Delete(List<object> models) => Delete(models as List<T>);
+        
         #endregion
 
         #region FUNCTIONALITIES
@@ -296,23 +267,21 @@ namespace Sqlite.ORM
         public void Add (T obj)
         {
             var hashcode = string.Empty;
-            var schema = _modelPropertiesNames;
 
             // if there is a reference table, then add primary key to it
             if (_referencedTables.Any())
             {
-                schema.Add(Configuration.PrimaryKeyColumnName(typeof(T)));
-                hashcode = _typeUtility.HashObjectRandomly(obj);;
+                hashcode = _typeUtility.HashObjectRandomly(obj);
             }
-            
-            var propertiesSchema = string.Join(',', schema.Select(x => $"`{x}`"));
-            var propertiesValues = ObjectToStatementClause(obj);
+
+            var propertiesSchema = FieldsToStatementClause(_simplifiedProperties.Keys);
+            var propertiesValues = ValuesToStatementClause(_simplifiedProperties.Values.Select(x => x(obj)));
             
             var commandText = $@"""
                     INSERT INTO {_tableName}
                         ({propertiesSchema})
                     VALUES
-                        ({propertiesValues} {(_referencedTables.Any() ? $", '{hashcode}'" : string.Empty)});
+                        ({propertiesValues});
                     """;
 
             // add parent object
@@ -323,7 +292,7 @@ namespace Sqlite.ORM
             {
                 if (_typeUtility.GetPropertyValue(propertyName, obj, typeof(T)) is IEnumerable<object> value)
                 {
-                    sqliteStorage.AddAll(value, hashcode: hashcode);    
+                    sqliteStorage.AddAll(value, foreignKey: hashcode);    
                 }
             }
         }
@@ -333,19 +302,41 @@ namespace Sqlite.ORM
         /// Stores list of models into database
         /// </summary>
         /// <param name="objects"></param>
-        /// <param name="hashcode"></param>
-        private void AddAll(IEnumerable<T> objects, string hashcode = null)
+        /// <param name="foreignKey"></param>
+        public void AddAll(IEnumerable<T> objects, string foreignKey = null)
         {
             var schema = _modelPropertiesNames;
-
-            // if there is a reference table, then add primary key to it
-            if (_referencedTables.Any())
-            {
-                schema.Add(Configuration.ForeignKeyColumnName(typeof(T)));
-            }
             
-            var propertiesSchema = string.Join(',', schema.Select(x => $"`{x}`"));
-            var propertiesValues = string.Join(',', objects.Select(obj => $"( {ObjectToStatementClause(obj)} {(hashcode != null ? $", '{hashcode}'" : string.Empty)}) "));
+            // if there is a reference table, then add primary key to it
+            if (_isReferenceType)
+            {
+                schema.Add(SqliteStorageConfiguration.ForeignKeyColumnName(typeof(T)));
+            }
+
+            string FormatValues(T obj)
+            {
+                var tokens = _simplifiedProperties.Values.Select(x => x(obj)).ToList();
+
+                // this is the foriegn key
+                if (foreignKey != null)
+                {
+                    tokens.Add(foreignKey);
+                }
+                      
+                // add nested object, i.e. foreach nested referenced property do a add all
+                foreach (var (propertyName, (propertyType, sqliteStorage)) in _referencedTables)
+                {
+                    if (_typeUtility.GetPropertyValue(propertyName, obj, typeof(T)) is IEnumerable<object> value)
+                    {
+                        sqliteStorage.AddAll(value, foreignKey: _typeUtility.HashObjectRandomly(obj));    
+                    }
+                }
+
+                return ValuesToStatementClause(tokens);
+            }
+
+            var propertiesSchema = FieldsToStatementClause(_simplifiedProperties.Keys);
+            var propertiesValues = string.Join(',', objects.Select(obj => $"( {FormatValues(obj)}) "));
 
             var commandText = $@"
                     INSERT INTO {_tableName}
@@ -411,7 +402,7 @@ namespace Sqlite.ORM
         /// Retrieves all models
         /// </summary>
         /// <returns></returns>
-        public IEnumerable<T> FindAll(int limitCount = Configuration.LimitCount)
+        public IEnumerable<T> FindAll(int limitCount = SqliteStorageConfiguration.LimitCount)
         {
             return FindAll(new Dictionary<string, object>());
         }
@@ -423,7 +414,7 @@ namespace Sqlite.ORM
         /// <param name="limitCount"></param>
         /// <returns></returns>
         /// <exception cref="ArgumentException"></exception>
-        public IEnumerable<T> FindAll(Dictionary<string, object> keyValueDictionary, int limitCount = Configuration.LimitCount)
+        public IEnumerable<T> FindAll(Dictionary<string, object> keyValueDictionary, int limitCount = SqliteStorageConfiguration.LimitCount)
         {
             // if argument is null, then use empty dictionary
             keyValueDictionary = keyValueDictionary ?? new Dictionary<string, object>();
@@ -435,7 +426,6 @@ namespace Sqlite.ORM
             
             var propertiesSchema = string.Join(',', _modelPropertiesNames.Select(x => $"`{x}`"));
             var propertiesValues = DictionaryToAndClause(keyValueDictionary);
-            
             
             var commandText = $@"
                     SELECT {propertiesSchema}
@@ -465,133 +455,6 @@ namespace Sqlite.ORM
             Dispose();
 
             return retVal;
-        }
-        
-        /// <summary>
-        /// Updates a model given source of type of filter and destination
-        /// </summary>
-        /// <param name="filter"></param>
-        /// <param name="destination"></param>
-        /// <returns></returns>
-        public void Update(Func<T, bool> filter, T destination)
-        {
-            Update(ConvertModelToDictionary(Find(filter)), ConvertModelToDictionary(destination));
-        }
-        
-        /// <summary>
-        /// Updates a model given source and destination
-        /// </summary>
-        /// <param name="source"></param>
-        /// <param name="destination"></param>
-        /// <returns></returns>
-        public void Update(T source, T destination)
-        {
-            Update(ConvertModelToDictionary(source), ConvertModelToDictionary(destination));
-        }
-
-        /// <summary>
-        /// Updates data structure
-        /// </summary>
-        /// <param name="source"></param>
-        /// <param name="destination"></param>
-        /// <param name="limitCount"></param>
-        /// <exception cref="ArgumentException"></exception>
-        public void Update(Dictionary<string, object> source, Dictionary<string, object> destination, int limitCount = 1)
-        {
-            if (!(CheckModelKeyValueDictionary(source) && CheckModelKeyValueDictionary(destination) && destination.Count > 0))
-            {
-                throw new ArgumentException($"There are keys in given the dictionary that do not exist in model");
-            }
-            
-            var propertiesSchema = string.Join(',', _modelPropertiesNames.Select(x => $"`{x}`"));
-            var originalPropertiesValues = DictionaryToAndClause(source);
-            var newPropertiesValues = DictionaryToJoinClause(destination);
-            
-            var commandText = $@"
-                    UPDATE {_tableName}
-                    SET {newPropertiesValues}
-                    WHERE {Configuration.IdColumnName} IN (
-                        SELECT {Configuration.IdColumnName}
-                        FROM {_tableName}
-                        {(source.Count > 0 ? $"WHERE {originalPropertiesValues}" : $"{string.Empty}") }
-                        LIMIT {limitCount}
-                    );
-            ";
-
-            CreateAndExecuteNonQueryCommand(commandText);
-        }
-
-        /// <summary>
-        /// Deletes object model from database given filter function
-        /// </summary>
-        /// <param name="filter"></param>
-        public void Delete(Func<T, bool> filter)
-        {
-            Delete(Find(filter));
-        }
-        
-        /// <summary>
-        /// Deletes object model from database
-        /// </summary>
-        /// <param name="model"></param>
-        public void Delete(T model)
-        {
-            Delete(ConvertModelToDictionary(model));
-        }
-        
-        /// <summary>
-        /// Deletes all models from list of models
-        /// </summary>
-        /// <param name="models"></param>
-        public void Delete(List<T> models)
-        {
-            models.ForEach(x => Delete(ConvertModelToDictionary(x)));
-        }
-
-        /// <summary>
-        /// Deletes all models from database, optionally we can specify the limit
-        /// </summary>
-        /// <param name="keyValueDictionary"></param>
-        /// <param name="limitCount"></param>
-        public void Delete(Dictionary<string, object> keyValueDictionary, int limitCount = Configuration.LimitCount)
-        {
-            var propertiesValues = DictionaryToAndClause(keyValueDictionary);
-            
-            var commandText = $@"
-                    DELETE FROM {_tableName}
-                    WHERE {Configuration.IdColumnName} IN
-                    (
-                        SELECT {Configuration.IdColumnName}
-                        FROM {_tableName}
-                        WHERE {propertiesValues}
-                        LIMIT {limitCount}
-                    );";
-            
-            CreateAndExecuteNonQueryCommand(commandText);
-        }
-        
-        /// <summary>
-        /// Deletes all models from table
-        /// </summary>
-        public void DeleteAll()
-        {
-            var commandText = $@"
-                    DELETE FROM {_tableName};
-                    ";
-            
-            CreateAndExecuteNonQueryCommand(commandText);
-        }
-
-        /// <summary>
-        /// Deletes actual table
-        /// </summary>
-        public void DeleteTable()
-        {
-            var commandText = $@"
-                    DROP TABLE {_tableName};
-                    ";
-            
-            CreateAndExecuteNonQueryCommand(commandText);
         }
 
         /// <summary>
@@ -649,13 +512,6 @@ namespace Sqlite.ORM
                 return command.ExecuteScalar();
             }
         }
-
-        private string ObjectToStatementClause(T obj)
-        {
-            return string.Join(',', _modelProperties.Select(x =>
-                $"'{DataConverterUponQuery(_typeUtility.GetPropertyValue(x.Key, obj, typeof(T)), x.Value)}'"));
-        }
-        
 
         /// <summary>
         /// Dictionary to "AND" clause
@@ -722,6 +578,18 @@ namespace Sqlite.ORM
                 var value = reader[propertyName] ?? GetDefaultOfType(propertyType);
                 
                 _typeUtility.SetPropertyValue(propertyName, obj, DataConverterUponRetrieve(value, propertyType));
+            }
+
+
+            var hashcode = _referencedTables.Any() ? reader[SqliteStorageConfiguration.PrimaryKeyColumnName(typeof(T))].ToString() : null;
+            
+            // build up nested enumerable properties
+            foreach (var (propertyName, (propertyType, sqliteStorage)) in _referencedTables)
+            {
+                if (_typeUtility.GetPropertyValue(propertyName, obj, typeof(T)) is IEnumerable<object> value)
+                {
+                    sqliteStorage.FindAll(hashcode);
+                }
             }
         }
 
@@ -870,6 +738,26 @@ namespace Sqlite.ORM
         #endregion
 
         #region STATIC_HELPERS
+
+        /// <summary>
+        /// Converts list of fields to statement clause
+        /// </summary>
+        /// <param name="fields"></param>
+        /// <returns></returns>
+        private static string FieldsToStatementClause(IEnumerable<string> fields)
+        {
+            return string.Join(',', fields.Select(x => $"`{x}`"));
+        }
+        
+        /// <summary>
+        /// Converts list of values to statement clause
+        /// </summary>
+        /// <param name="values"></param>
+        /// <returns></returns>
+        private static string ValuesToStatementClause(IEnumerable<string> values)
+        {
+            return string.Join(',', values.Select(x => $"'{x}'"));
+        }
 
         /// <summary>
         /// Returns default value given type

@@ -3,15 +3,8 @@ using System.Collections.Generic;
 
 namespace Sqlite.ORM.Interfaces
 {
-    public interface ISqliteStorageSimpleType
+    public interface ISqliteStorageSimpleType : ISqliteStorage<object>
     {
-        // create table
-        void CreateTable();
-
-        // add method overloads
-        void Add(object obj);
-
-        // count of records in table
-        int Count();
+        
     }
 }

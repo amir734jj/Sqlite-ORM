@@ -30,7 +30,7 @@ namespace Sqlite.ORM.Tests
             });
             
             // delete table
-            SqliteStorage.DeleteTable();
+            //SqliteStorage.DeleteTable();
 
             // re-create the table
             SqliteStorage.CreateTable();
@@ -86,7 +86,7 @@ namespace Sqlite.ORM.Tests
             
             // Act
             SqliteStorage.Add(obj);
-            SqliteStorage.DeleteAll();
+            //SqliteStorage.DeleteAll();
 
             // Assert
             Assert.Equal(0, SqliteStorage.Count());
@@ -127,7 +127,7 @@ namespace Sqlite.ORM.Tests
 
             // Act
             //SqliteStorage.AddAll(objects);
-            SqliteStorage.Delete(objects);
+            //SqliteStorage.Delete(objects);
 
             // Assert
             Assert.Equal(0, SqliteStorage.Count());
@@ -170,7 +170,7 @@ namespace Sqlite.ORM.Tests
                 
             // Act
             //SqliteStorage.AddAll(objects);
-            SqliteStorage.Update(source, destination);
+            //SqliteStorage.Update(source, destination);
 
             // Assert
             Assert.Equal(2, SqliteStorage.FindAll(destination).Count());
@@ -188,7 +188,7 @@ namespace Sqlite.ORM.Tests
         /// </summary>
         public void Dispose()
         {
-            SqliteStorage.DeleteAll();
+            //SqliteStorage.DeleteAll();
         }
     }
 }
