@@ -1,7 +1,9 @@
-# SQLite-ORM
+# SQLite-ORM [![Build Status](https://travis-ci.org/amir734jj/Sqlite-ORM.svg?branch=master)](https://travis-ci.org/amir734jj/Sqlite-ORM) 
+
 Simple SQLite ORM, easy and intuitive to use. This ORM follows code-first design, but you can use database-first design as long as database schema matches type conversions. The code does support complex types and custom serializer and de-serializer for custom types. The only dependency is:  [`Microsoft.Data.SQLite`](https://github.com/aspnet/Microsoft.Data.Sqlite).
 
 [Nuget Link](https://www.nuget.org/packages/Sqlite.ORM/)
+
 
 ```C#
 // initialize new instance
@@ -72,6 +74,11 @@ int Count();
 - - - -
 
 ## Notes:
-I started this project because I could not find a good ORM for SQL, similar to what [`LiteDB`](https://github.com/mbdavid/LiteDB) does for C# Mongo community. It is not the fastest ORM but it is very simple and intuitive. Please feel free to contribute to this project.
+- I started this project because I could not find a good ORM for SQL, similar to what [`LiteDB`](https://github.com/mbdavid/LiteDB) does for C# Mongo community. It is not the fastest ORM but it is very simple and intuitive. Please feel free to contribute to this project.
 
+- unit tests actually pass locally, Travis-CI for .NET core is still in beta, so I don't know what is wrong.
+
+- - - -
+## Issues:
+- Code does not support `IEnumerable` property types, that is the next priority to fix.
 
